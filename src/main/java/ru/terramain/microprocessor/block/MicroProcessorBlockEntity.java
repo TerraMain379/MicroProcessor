@@ -75,6 +75,7 @@ public class MicroProcessorBlockEntity extends BlockEntity {
         ListTag listTag = new ListTag();
         this.logs.forEach(string -> listTag.add(net.minecraft.nbt.StringTag.valueOf(string)));
         tag.put("logs", listTag);
+        tag.putBoolean("isRunning", this.core.isRunning());
     }
     @Override protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
@@ -95,6 +96,10 @@ public class MicroProcessorBlockEntity extends BlockEntity {
             }
         } else {
             this.logs = new ArrayList<>();
+        }
+
+        if (tag.getBoolean("isRunning")) {
+            setRunning(true, false);
         }
     }
 

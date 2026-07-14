@@ -22,6 +22,7 @@ import net.neoforged.neoforge.registries.DeferredItem;
 import org.graalvm.polyglot.HostAccess;
 import ru.terramain.microprocessor.MicroProcessorMod;
 import ru.terramain.microprocessor.block.MicroProcessorBlock;
+import ru.terramain.microprocessor.js.JsFuture;
 import ru.terramain.microprocessor.logic.MicroProcessorException;
 import ru.terramain.microprocessor.logic.MicroProcessorWorker;
 import ru.terramain.microprocessor.plate.*;
@@ -100,8 +101,6 @@ public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Dat
     public static class Jso extends AbstractJsoPlate {
         @HostAccess.Export public int signal;
         @HostAccess.Export public boolean isActive;
-        @HostAccess.Export public int inputWeakSignal;
-        @HostAccess.Export public int inputStrongSignal;
 
         public Jso(MicroProcessorWorker worker, Direction direction, PlateState<?, ?> plateState) {
             super(worker, PlateRedstoneDistributor.instance(), direction, plateState);
@@ -129,12 +128,20 @@ public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Dat
         }
 
         @HostAccess.Export
-        public int readWeakSignal() {
-            return 0;
+        public JsFuture<Integer> readWeakSignal() {
+            return this.worker.waitAnswerForW2SRequest(new GetWeakSignalRequestMessage(
+                    this.worker.nextId.getAndIncrement(),
+                    this.direction,
+                    this.plate
+            ));
         }
         @HostAccess.Export
-        public int readStrongSignal() {
-            return 0;
+        public JsFuture<Integer> readStrongSignal() {
+            return this.worker.waitAnswerForW2SRequest(new GetStrongSignalRequestMessage(
+                    this.worker.nextId.getAndIncrement(),
+                    this.direction,
+                    this.plate
+            ));
         }
     }
     public static final AbstractJsoPlateGenerator<Jso> jsoGenerator = Jso::new;
@@ -173,11 +180,17 @@ public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Dat
             return new MicroProcessorWorker.AnswerS2WMessage(request.id, false, setSignalMessage.signal);
         }
         else if (request instanceof GetWeakSignalRequestMessage) {
-            int signal = context.context.be.getLevel().getSignal(context.context.be.getBlockPos(), context.direction);
+            Level level = context.context.be.getLevel();
+            BlockPos pos = context.context.be.getBlockPos();
+            Direction side = context.direction;
+            int signal = level.getSignal(pos.relative(side), side);
             return new MicroProcessorWorker.AnswerS2WMessage(request.id, false, signal);
         }
         else if (request instanceof GetStrongSignalRequestMessage) {
-            int signal = context.context.be.getLevel().getDirectSignal(context.context.be.getBlockPos(), context.direction);
+            Level level = context.context.be.getLevel();
+            BlockPos pos = context.context.be.getBlockPos();
+            Direction side = context.direction;
+            int signal = level.getDirectSignal(pos.relative(side), side);
             return new MicroProcessorWorker.AnswerS2WMessage(request.id, false, signal);
         }
         return super.request(request, context);

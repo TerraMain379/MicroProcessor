@@ -51,8 +51,7 @@ public class MicroProcessorJso {
                 handler.executeVoid(args);
             }
             catch (Exception e) {
-                e.printStackTrace();
-                // TODO: error handle
+                worker.reportFatalError(e, MicroProcessorWorker.LogMessage.ErrorSource.MP_EVENT);
             }
         });
     }

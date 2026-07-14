@@ -217,7 +217,7 @@ public class MicroProcessorScriptScreen extends Screen {
         }
         this.logsField.setLinesPreserveCursor(this.logs);
 
-        this.updateRunningButton(payload.isRunning());
+        if (payload.isRunningChanged()) this.updateRunningButton(payload.isRunning());
     }
 
     public void updateRunningButton(boolean newIsRunning) {
