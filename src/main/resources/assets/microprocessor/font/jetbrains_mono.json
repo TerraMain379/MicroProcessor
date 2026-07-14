@@ -1,0 +1,11 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "microprocessor:jetbrains_mono_nl_medium.ttf",
+      "size": 9.0,
+      "oversample": 2.0,
+      "shift": [0, 0]
+    }
+  ]
+}
