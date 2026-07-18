@@ -1,6 +1,7 @@
 package ru.terramain.microprocessor.block;
 
 import com.mojang.serialization.MapCodec;
+import com.simibubi.create.content.kinetics.base.IRotate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
@@ -10,6 +11,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.*;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
@@ -22,7 +24,7 @@ import org.jetbrains.annotations.NotNull;
 import ru.terramain.microprocessor.MicroProcessorMod;
 import ru.terramain.microprocessor.logic.MicroProcessorCore;
 
-public class MicroProcessorBlock extends BaseEntityBlock {
+public class MicroProcessorBlock extends BaseEntityBlock implements IRotate {
     public static final MapCodec<MicroProcessorBlock> CODEC = simpleCodec(MicroProcessorBlock::new);
 
     public MicroProcessorBlock(Properties properties) {
@@ -32,6 +34,7 @@ public class MicroProcessorBlock extends BaseEntityBlock {
         this(BlockBehaviour.Properties.of()
             // .replaceable()
             .jumpFactor(3)
+            .isRedstoneConductor((state, level, pos) -> false)
         );
     }
 
@@ -63,11 +66,18 @@ public class MicroProcessorBlock extends BaseEntityBlock {
         MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) level.getBlockEntity(pos);
         if (be != null) {
             be.onRemove(blockState, level, pos, newBlockState, isMoving);
+            be.remove();
         }
+        super.onRemove(blockState, level, pos, newBlockState, false);
     }
-
-    @Override
-    protected BlockState updateShape(BlockState state, Direction direction, BlockState neighborState, LevelAccessor level, BlockPos pos, BlockPos neighborPos) {
+    @Override protected void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
+        MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) level.getBlockEntity(pos);
+        if (be != null) {
+            be.onPlace(state, level, pos, oldState, movedByPiston);
+        }
+        super.onPlace(state, level, pos, oldState, movedByPiston);
+    }
+    @Override protected BlockState updateShape(BlockState state, Direction direction, BlockState neighborState, LevelAccessor level, BlockPos pos, BlockPos neighborPos) {
         MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) level.getBlockEntity(pos);
         be.neighborShapeChanged(state, direction, neighborState, level, pos, neighborPos);
         return state;
@@ -87,6 +97,20 @@ public class MicroProcessorBlock extends BaseEntityBlock {
         return be.onCheckStrongSignal(state, level, pos, direction.getOpposite());
     }
     ///////////////// end static actions
+
+    ///////////////// create
+    @Override public boolean hasShaftTowards(LevelReader levelReader, BlockPos blockPos, BlockState blockState, Direction direction) {
+        MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) levelReader.getBlockEntity(blockPos);
+        return be.hasShaftTowards(levelReader, blockPos, blockState, direction);
+    }
+    @Override public Direction.Axis getRotationAxis(BlockState blockState) {
+        return null;
+    }
+    ///////////////// end create
+
+
+
+
 
     @Override public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         return level.isClientSide() ? null : createTickerHelper(

@@ -17,6 +17,7 @@ import ru.terramain.microprocessor.MicroProcessorMod;
 import ru.terramain.microprocessor.logic.MicroProcessorContext;
 import ru.terramain.microprocessor.plate.PlateActionContext;
 import ru.terramain.microprocessor.plate.PlateRenderer;
+import ru.terramain.microprocessor.plate.PlateRendererContext;
 import ru.terramain.microprocessor.plate.PlateState;
 import ru.terramain.microprocessor.plate.plates.NullPlate;
 
@@ -65,7 +66,14 @@ public class MicroProcessorRenderer implements BlockEntityRenderer<MicroProcesso
 
             MicroProcessorContext context1 = new MicroProcessorContext(be);
             PlateActionContext<?> context2 = new PlateActionContext<>(plateState, direction, context1);
-            plateRenderer.renderPlate(context2, poseStack, vertexBuilder, direction, pos, newPackedLight, packedOverlay);
+            PlateRendererContext rendererContext = new PlateRendererContext(
+                    partialTick, poseStack, bufferSource, vertexBuilder,
+                    direction, pos,
+                    newPackedLight, packedOverlay
+            );
+            plateRenderer.renderPlate(context2, rendererContext);
+
+//            plateRenderer.renderShaft(context2, partialTick, poseStack, bufferSource, direction, pos, newPackedLight, packedOverlay);
         }
     }
 

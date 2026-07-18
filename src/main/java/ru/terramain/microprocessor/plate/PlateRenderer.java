@@ -10,15 +10,18 @@ import net.minecraft.world.inventory.InventoryMenu;
 import ru.terramain.microprocessor.MicroProcessorMod;
 
 public interface PlateRenderer {
-    public static final ResourceLocation BASE_TEXTURE = ResourceLocation.fromNamespaceAndPath(MicroProcessorMod.MODID, "block/microprocessor");
+    ResourceLocation BASE_TEXTURE = ResourceLocation.fromNamespaceAndPath(MicroProcessorMod.MODID, "block/microprocessor");
 
-    void renderPlate(PlateActionContext<?> context, PoseStack poseStack, VertexConsumer vertexBuilder,
-                                Direction face, BlockPos pos, int packedLight, int packedOverlay);
+    void renderPlate(PlateActionContext<?> plateContext, PlateRendererContext rendererContext);
 
-    default void renderBase(PoseStack poseStack, VertexConsumer vertexBuilder,
-                                  Direction face, BlockPos pos, int packedLight, int packedOverlay) {
+    default void renderBase(PlateActionContext<?> plateContext, PlateRendererContext rendererContext) {
         TexturePlateRenderer.renderPlateTexture(
                 new Material(InventoryMenu.BLOCK_ATLAS, BASE_TEXTURE).sprite(),
-                poseStack, vertexBuilder, face, pos, packedLight, packedOverlay);
+                rendererContext);
+    }
+
+    default void renderBase(PoseStack poseStack, VertexConsumer vertexBuilder, Direction face, BlockPos pos,
+                            int packedLight, int packedOverlay) {
+        renderBase(null, new PlateRendererContext(0f, poseStack, null, vertexBuilder, face, pos, packedLight, packedOverlay));
     }
 }

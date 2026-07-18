@@ -44,8 +44,8 @@ public class PlateObserver extends Plate<PlateObserver.Data> {
     public static class DataCodec implements PlateDataCodec<Data> {
         public static final DataCodec INSTANCE = new DataCodec();
         public static final Codec<Data> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                Codec.INT.fieldOf("pre_active_wait_counter").forGetter(o -> o.preActiveWaitCounter),
-                Codec.INT.fieldOf("active_counter").forGetter(o -> o.activeCounter)
+                Codec.INT.optionalFieldOf("pre_active_wait_counter", 0).forGetter(o -> o.preActiveWaitCounter),
+                Codec.INT.optionalFieldOf("active_counter", 0).forGetter(o -> o.activeCounter)
         ).apply(instance, Data::new));
         public static final StreamCodec<RegistryFriendlyByteBuf, Data> STREAM_CODEC = StreamCodec.composite(
                 ByteBufCodecs.INT, o -> o.preActiveWaitCounter,

@@ -84,7 +84,14 @@ public class PlateState<D extends PlateData, P extends Plate<D>> {
                 Plate<?> plate = PlateRegister.getPlateByType(type);
                 Codec<? extends PlateData> codec = plate.dataCodec.getCodec();
                 DataResult<? extends Pair<?, T>> dataResult = codec.decode(ops, dataVal);
-                PlateData data = (PlateData) dataResult.getOrThrow().getFirst();
+                PlateData data;
+                try {
+                    data = (PlateData) dataResult.getOrThrow().getFirst();
+                }
+                catch (Exception e) {
+                    e.printStackTrace();
+                    data = plate.dataCodec.defaultData();
+                }
                 return decode1(ops, input, (Plate<PlateData>) plate, data);
             });
         }

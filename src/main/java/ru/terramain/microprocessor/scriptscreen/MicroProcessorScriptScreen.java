@@ -15,6 +15,7 @@ import java.util.ArrayList;
 
 public class MicroProcessorScriptScreen extends Screen {
     public static MicroProcessorScriptScreen instance = null;
+    public static boolean openedLogs = false;
 
     private static final int MARGIN = 30;
     private static final int BOTTOM_BAR_Y_OFFSET = 35;
@@ -31,7 +32,6 @@ public class MicroProcessorScriptScreen extends Screen {
     public boolean preInit = true;
     public String code;
     public ArrayList<String> logs;
-    public boolean openedLogs = false;
     public boolean isRunning;
 
     private Layout layout;

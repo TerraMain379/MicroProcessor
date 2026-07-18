@@ -1,6 +1,7 @@
 package ru.terramain.microprocessor.plate.plates;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.Material;
 import net.minecraft.core.BlockPos;
@@ -27,36 +28,42 @@ import ru.terramain.microprocessor.logic.MicroProcessorException;
 import ru.terramain.microprocessor.logic.MicroProcessorWorker;
 import ru.terramain.microprocessor.plate.*;
 
-public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Data> {
+public class PlateDistributor extends Plate<PlateDistributor.Data> {
     public static final String TYPE = "distributor";
 
-    protected PlateRedstoneDistributor() {
+    protected PlateDistributor() {
         super(TYPE, DataCodec.INSTANCE, Item.instance, renderer, jsoGenerator);
     }
 
     public static class Data implements PlateData {
         public int signal;
+        public int lastInput;
 
-        public Data(int signal) {
+        public Data(int signal, int lastInput) {
             this.signal = signal;
+            this.lastInput = lastInput;
         }
 
         @Override
         public <D extends PlateData> D copy() {
-            return (D) new Data(signal);
+            return (D) new Data(signal, lastInput);
         }
     }
     public static class DataCodec implements PlateDataCodec<Data> {
         public static final DataCodec INSTANCE = new DataCodec();
-        public static final Codec<Data> CODEC = Codec.INT.xmap(Data::new, data -> data.signal);
-        public static final StreamCodec<RegistryFriendlyByteBuf, Data> STREAM_CODEC = StreamCodec.of(
-                (o, data) -> ByteBufCodecs.INT.encode(o, data.signal),
-                i -> new Data(ByteBufCodecs.INT.decode(i))
+        public static final Codec<Data> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                Codec.INT.optionalFieldOf("signal", 0).forGetter(o -> o.signal),
+                Codec.INT.optionalFieldOf("last_input", 0).forGetter(o -> o.lastInput)
+        ).apply(instance, Data::new));
+        public static final StreamCodec<RegistryFriendlyByteBuf, Data> STREAM_CODEC = StreamCodec.composite(
+                ByteBufCodecs.INT, o -> o.signal,
+                ByteBufCodecs.INT, o -> o.lastInput,
+                Data::new
         );
 
         @Override
         public Data defaultData() {
-            return new Data(0);
+            return new Data(0, 0);
         }
         @Override
         public Codec<Data> getCodec() {
@@ -68,7 +75,7 @@ public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Dat
             return STREAM_CODEC;
         }
     }
-    public static class Item extends AbstractPlateItem<Data, PlateRedstoneDistributor> {
+    public static class Item extends AbstractPlateItem<Data, PlateDistributor> {
         public static final DeferredItem<AbstractPlateItem<Data, ?>> instance = MicroProcessorMod.ITEMS.register("plate_" + TYPE, () -> new Item());
 
         public Item(Properties properties) {
@@ -79,8 +86,8 @@ public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Dat
         }
 
         @Override
-        public PlateRedstoneDistributor getPlate() {
-            return PlateRedstoneDistributor.instance();
+        public PlateDistributor getPlate() {
+            return PlateDistributor.instance();
         }
     }
     public static final PlateRenderer renderer = new TexturePlateRenderer() {
@@ -91,7 +98,7 @@ public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Dat
         public TextureAtlasSprite sprite(PlateActionContext<?> context) {
             Data data = (Data) context.plateState.data;
             if (data.signal > 0) {
-                return new Material(InventoryMenu.BLOCK_ATLAS, texture_on).sprite();
+                return  new Material(InventoryMenu.BLOCK_ATLAS, texture_on).sprite();
             }
             else {
                 return new Material(InventoryMenu.BLOCK_ATLAS, texture_off).sprite();
@@ -103,11 +110,11 @@ public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Dat
         @HostAccess.Export public boolean isActive;
 
         public Jso(MicroProcessorWorker worker, Direction direction, PlateState<?, ?> plateState) {
-            super(worker, PlateRedstoneDistributor.instance(), direction, plateState);
+            super(worker, PlateDistributor.instance(), direction, plateState);
             this.update(plateState);
         }
         public void update(PlateState<?, ?> plateState1) {
-            PlateState<Data, PlateRedstoneDistributor> plateState = (PlateState<Data, PlateRedstoneDistributor>) plateState1;
+            PlateState<Data, PlateDistributor> plateState = (PlateState<Data, PlateDistributor>) plateState1;
             this.signal = plateState.data.signal;
             this.isActive = plateState.data.signal > 0;
         }
@@ -128,16 +135,8 @@ public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Dat
         }
 
         @HostAccess.Export
-        public JsFuture<Integer> readWeakSignal() {
-            return this.worker.waitAnswerForW2SRequest(new GetWeakSignalRequestMessage(
-                    this.worker.nextId.getAndIncrement(),
-                    this.direction,
-                    this.plate
-            ));
-        }
-        @HostAccess.Export
-        public JsFuture<Integer> readStrongSignal() {
-            return this.worker.waitAnswerForW2SRequest(new GetStrongSignalRequestMessage(
+        public JsFuture<Integer> readInput() {
+            return this.worker.waitAnswerForW2SRequest(new GetInputRequestMessage(
                     this.worker.nextId.getAndIncrement(),
                     this.direction,
                     this.plate
@@ -154,13 +153,8 @@ public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Dat
             this.signal = signal;
         }
     }
-    public static class GetWeakSignalRequestMessage extends MicroProcessorWorker.RequestPlateW2SMessage {
-        public GetWeakSignalRequestMessage(long id, Direction direction, Plate<?> plate) {
-            super(id, direction, plate);
-        }
-    }
-    public static class GetStrongSignalRequestMessage extends MicroProcessorWorker.RequestPlateW2SMessage {
-        public GetStrongSignalRequestMessage(long id, Direction direction, Plate<?> plate) {
+    public static class GetInputRequestMessage extends MicroProcessorWorker.RequestPlateW2SMessage {
+        public GetInputRequestMessage(long id, Direction direction, Plate<?> plate) {
             super(id, direction, plate);
         }
     }
@@ -174,23 +168,22 @@ public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Dat
             super(direction, "set_active", new Object[]{ isActive });
         }
     }
+    public static class SetInputEventMessage extends MicroProcessorWorker.PlateEventS2WMessage {
+        public SetInputEventMessage(Direction direction, int signal) {
+            super(direction, "set_input", new Object[]{ signal });
+        }
+    }
+
     @Override public MicroProcessorWorker.AnswerS2WMessage request(MicroProcessorWorker.RequestPlateW2SMessage request, PlateActionContext<?> context) {
         if (request instanceof SetSignalRequestMessage setSignalMessage) {
             setSignal(context, setSignalMessage.signal, false);
             return new MicroProcessorWorker.AnswerS2WMessage(request.id, false, setSignalMessage.signal);
         }
-        else if (request instanceof GetWeakSignalRequestMessage) {
+        else if (request instanceof GetInputRequestMessage) {
             Level level = context.context.be.getLevel();
             BlockPos pos = context.context.be.getBlockPos();
             Direction side = context.direction;
             int signal = level.getSignal(pos.relative(side), side);
-            return new MicroProcessorWorker.AnswerS2WMessage(request.id, false, signal);
-        }
-        else if (request instanceof GetStrongSignalRequestMessage) {
-            Level level = context.context.be.getLevel();
-            BlockPos pos = context.context.be.getBlockPos();
-            Direction side = context.direction;
-            int signal = level.getDirectSignal(pos.relative(side), side);
             return new MicroProcessorWorker.AnswerS2WMessage(request.id, false, signal);
         }
         return super.request(request, context);
@@ -241,10 +234,22 @@ public class PlateRedstoneDistributor extends Plate<PlateRedstoneDistributor.Dat
         return data.signal;
     }
 
-    private static PlateRedstoneDistributor inst = null;
-    public static PlateRedstoneDistributor instance() {
+    @Override
+    public void onNeighborChanged(PlateActionContext<?> context, BlockState state, Level level, BlockPos pos, Block block, BlockPos neighborPos, boolean movedByPiston) {
+        super.onNeighborChanged(context, state, level, pos, block, neighborPos, movedByPiston);
+
+        int input = level.getSignal(pos.relative(context.direction), context.direction);
+        Data data = (Data) context.plateState.data;
+        if (data.lastInput != input) {
+            data.lastInput = input;
+            context.context.be.core.worker.dataPool.pushS2WMessage(new SetInputEventMessage(context.direction, input));
+        }
+    }
+
+    private static PlateDistributor inst = null;
+    public static PlateDistributor instance() {
         if (inst == null) {
-            inst = PlateRegister.register(new PlateRedstoneDistributor());
+            inst = PlateRegister.register(new PlateDistributor());
         }
         return inst;
     }

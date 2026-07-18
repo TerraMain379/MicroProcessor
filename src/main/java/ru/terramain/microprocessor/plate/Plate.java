@@ -52,23 +52,26 @@ public abstract class Plate<D extends PlateData> {
         MicroProcessorBlockEntity be = context.context.be;
         Direction direction = context.direction;
 
+        Plate<?> plate = plateItem.getPlate();
+        PlateState<?, ?> newPlateState = PlateState.of(plate);
+
+        onPlateRemoval(context, newPlateState, player);
+
         PlateState<?, ?> oldPlateState = be.getPlateState(direction);
         if (oldPlateState != null) {
             AbstractPlateItem<?, ?> oldPlateItem = oldPlateState.plate.item.get();
-            if (oldPlateItem != null) {
-                ItemStack dropStack = oldPlateItem.fromPlateState(oldPlateState);
-                SimpleContainer container = new SimpleContainer(dropStack);
-                Containers.dropContents(level, pos.relative(direction), container);
-            }
+            ItemStack dropStack = oldPlateItem.fromPlateState(oldPlateState);
+            SimpleContainer container = new SimpleContainer(dropStack);
+            Containers.dropContents(level, pos.relative(direction), container);
         }
-        Plate<?> plate = plateItem.getPlate();
-        PlateState<?, ?> plateState = PlateState.of(plate);
-        be.setPlateState(direction, plateState);
+
+        be.setPlateState(direction, newPlateState);
+        afterPlateRemoval(context, newPlateState, player);
 
         itemStack.setCount(itemStack.getCount()-1);
 
-        PlateActionContext<?> plateActionContext = new PlateActionContext<>(plateState, direction, context.context);
-        plate.onPlatePlacement(plateActionContext, state, level, pos, player);
+        PlateActionContext<?> plateActionContext = new PlateActionContext<>(newPlateState, direction, context.context);
+        plate.onPlatePlacement(plateActionContext, player);
         return ItemInteractionResult.SUCCESS;
     }
     public ItemInteractionResult onClickOnMicroprocessorInCrouching(PlateActionContext<?> context, ItemStack itemStack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
@@ -77,14 +80,15 @@ public abstract class Plate<D extends PlateData> {
 
         PlateState<?, ?> oldPlateState = be.getPlateState(direction);
         if (oldPlateState != null) {
+            onPlateRemoval(context, null, player);
+
             AbstractPlateItem<?, ?> oldPlateItem = oldPlateState.plate.item.get();
-            if (oldPlateItem != null) {
-                ItemStack dropStack = oldPlateItem.fromPlateState(oldPlateState);
-                SimpleContainer container = new SimpleContainer(dropStack);
-                Containers.dropContents(level, pos.relative(direction), container);
-                be.setPlateState(direction, null);
-                return ItemInteractionResult.SUCCESS;
-            }
+            ItemStack dropStack = oldPlateItem.fromPlateState(oldPlateState);
+            SimpleContainer container = new SimpleContainer(dropStack);
+            Containers.dropContents(level, pos.relative(direction), container);
+            be.setPlateState(direction, null);
+            afterPlateRemoval(context, null, player);
+            return ItemInteractionResult.SUCCESS;
         }
         return ItemInteractionResult.FAIL;
     }
@@ -96,10 +100,13 @@ public abstract class Plate<D extends PlateData> {
         return ItemInteractionResult.SUCCESS;
     }
 
-    public void onPlatePlacement(PlateActionContext<?> context, BlockState state, Level level, BlockPos pos, Player player) { }
+    public void onPlatePlacement(PlateActionContext<?> context, Player player) { }
+    public void onPlateRemoval(PlateActionContext<?> context, PlateState<?, ?> newPlateState, Player player) { }
+    public void afterPlateRemoval(PlateActionContext<?> context, PlateState<?, ?> newPlateState, Player player) { }
     public void onNeighborChanged(PlateActionContext<?> context, BlockState state, Level level, BlockPos pos, Block block, BlockPos neighborPos, boolean movedByPiston) { }
     public void onNeighborShapeChanged(PlateActionContext<?> context, BlockState state, Direction direction, BlockState neighborState, LevelAccessor level, BlockPos pos, BlockPos neighborPos) { }
     public void onTick(PlateActionContext<?> context) { }
     public int calculateWeakSignal(PlateActionContext<?> context, Direction direction) { return 0; }
     public int calculateStrongSignal(PlateActionContext<?> context, Direction direction) { return 0; }
+    public boolean hasShaft(PlateActionContext<?> context) { return false; }
 }

@@ -41,8 +41,8 @@ public class PlatePiston extends Plate<PlatePiston.Data> {
     public static class DataCodec implements PlateDataCodec<Data> {
         public static final DataCodec INSTANCE = new DataCodec();
         public static final Codec<Data> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                Codec.BOOL.fieldOf("is_spread").forGetter(o -> o.isSpread),
-                Codec.INT.fieldOf("move_delta").forGetter(o -> o.moveDelta)
+                Codec.BOOL.optionalFieldOf("is_spread", false).forGetter(o -> o.isSpread),
+                Codec.INT.optionalFieldOf("move_delta", 0).forGetter(o -> o.moveDelta)
         ).apply(instance, Data::new));
 
         public static final StreamCodec<RegistryFriendlyByteBuf, Data> STREAM_CODEC = StreamCodec.composite(

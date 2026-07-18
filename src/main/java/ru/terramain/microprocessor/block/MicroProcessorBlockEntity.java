@@ -7,13 +7,13 @@ import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 import com.mojang.serialization.DynamicOps;
+import com.simibubi.create.content.kinetics.RotationPropagator;
+import com.simibubi.create.content.kinetics.transmission.SplitShaftBlockEntity;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponentMap;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -21,21 +21,18 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.Level;
-import net.minecraft.world.level.LevelAccessor;
+import net.minecraft.world.level.*;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
 import ru.terramain.microprocessor.MicroProcessorMod;
+import ru.terramain.microprocessor.deps.create.plates.PlateKinetic;
 import ru.terramain.microprocessor.logic.MicroProcessorContext;
 import ru.terramain.microprocessor.logic.MicroProcessorCore;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import ru.terramain.microprocessor.MicroProcessorDataComponents;
@@ -46,7 +43,7 @@ import ru.terramain.microprocessor.network.payload.scriptscreen.UpdateScriptScre
 import ru.terramain.microprocessor.plate.*;
 import ru.terramain.microprocessor.plate.plates.NullPlate;
 
-public class MicroProcessorBlockEntity extends BlockEntity {
+public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
     public MicroProcessorCore core;
 
     public Plates plates;
@@ -64,8 +61,8 @@ public class MicroProcessorBlockEntity extends BlockEntity {
 
     ///////////////// serialize/deserialize
     // nbt
-    @Override protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.saveAdditional(tag, registries);
+    @Override protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+        super.write(tag, registries, clientPacket);
 
         DynamicOps<Tag> ops = registries.createSerializationContext(NbtOps.INSTANCE);
         Tag platesTag = Plates.CODEC.encodeStart(ops, Plates.Snapshot.by(this.plates)).getOrThrow();
@@ -77,8 +74,8 @@ public class MicroProcessorBlockEntity extends BlockEntity {
         tag.put("logs", listTag);
         tag.putBoolean("isRunning", this.core.isRunning());
     }
-    @Override protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
-        super.loadAdditional(tag, registries);
+    @Override protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
+        super.read(tag, registries, clientPacket);
 
         DynamicOps<Tag> ops = registries.createSerializationContext(NbtOps.INSTANCE);
         if (tag.contains("plates")) {
@@ -99,7 +96,7 @@ public class MicroProcessorBlockEntity extends BlockEntity {
         }
 
         if (tag.getBoolean("isRunning")) {
-            setRunning(true, false);
+            this.core.scheduleRun();
         }
     }
 
@@ -107,7 +104,7 @@ public class MicroProcessorBlockEntity extends BlockEntity {
     @Override public @NotNull CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         return saveCustomAndMetadata(registries);
     }
-    @Override public Packet<ClientGamePacketListener> getUpdatePacket() {
+    @Override public ClientboundBlockEntityDataPacket getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
@@ -140,6 +137,18 @@ public class MicroProcessorBlockEntity extends BlockEntity {
             );
         }
         super.setChanged();
+    }
+    public void setKineticChanged() {
+        if (level == null || level.isClientSide) return;
+        // 1. Пока speed ещё может быть != 0 — починить downstream
+        RotationPropagator.handleRemoved(level, worldPosition, this);
+        // 2. Отцепить MP от старой сети
+        if (hasNetwork())
+            getOrCreateNetwork().remove(this);
+        removeSource();  // speed=0, source=null, network=null
+        // 3. Заново подключиться только через открытые порты
+        attachKinetics();
+        sendData();
     }
     ///////////////// end client sync
 
@@ -191,7 +200,11 @@ public class MicroProcessorBlockEntity extends BlockEntity {
             plateState.plate.onNeighborShapeChanged(context, state, direction, neighborState, level, pos, neighborPos);
         });
     }
-
+    public boolean hasShaftTowards(LevelReader levelReader, BlockPos blockPos, BlockState blockState, Direction direction) {
+        return onePlateFunction(direction, (plateState, context) -> {
+            return plateState.plate.hasShaft(context);
+        }, false);
+    }
     public int onCheckWeakSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
         return onePlateFunction(direction, (plateState, context) -> {
             return plateState.plate.calculateWeakSignal(context, direction);
@@ -238,6 +251,7 @@ public class MicroProcessorBlockEntity extends BlockEntity {
             this.core.worker.run(this.code);
         }
         if (notify) setRunningNotify(isRunning);
+        this.setChanged();
     }
     public void setRunningNotify(boolean isRunning) {
         ScriptScreenSessions.sendUpdate(this.getLevel().getServer(), this.getBlockPos(), new UpdateScriptScreenPayload(
@@ -263,6 +277,19 @@ public class MicroProcessorBlockEntity extends BlockEntity {
             plateState.plate.onTick(context);
         });
     }
+
+    @Override public float getRotationSpeedModifier(Direction face) {
+        PlateState<?, ?> plateState = getPlateState(face);
+        if (!(plateState.plate instanceof PlateKinetic)) return 1;
+        PlateKinetic.Data data = (PlateKinetic.Data) plateState.data;
+
+        if (data.isLocked) return 0;
+
+        float mod = data.speedModifier;
+        if (data.isReversed && hasSource() && face != getSourceFacing())
+            mod *= -1;
+        return mod;
+    }
     ///////////////// end logic center
 
 
@@ -271,6 +298,9 @@ public class MicroProcessorBlockEntity extends BlockEntity {
         if (!level.isClientSide) {
             ScriptScreenSessions.closeAll(level.getServer(), pos);
         }
+    }
+    protected void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
+        setKineticChanged();
     }
     ///////////////// end actions
 

@@ -72,13 +72,15 @@ public class MicroProcessorMod {
 
         NullPlate.instance();
         PlateObserver.instance();
-        PlateRedstoneDistributor.instance();
+        PlateDistributor.instance();
         PlatePiston.instance();
         PlateStickyPiston.instance();
+
+        Integration.registerEvent(modEventBus);
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
-        Integration.integrate(event);
+        Integration.setupEvent(event);
     }
 
     @SubscribeEvent

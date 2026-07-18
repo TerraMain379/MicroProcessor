@@ -40,6 +40,7 @@ public class MicroProcessorWorker {
         if (workerThread != null) return false;
         isRunningStorage = new IsRunningStorage();
         isRunningStorage.isRunning = true;
+        dataPool.s2wMessages.clear();
         workerThread = new Thread(() -> {
             try {
                 runLoop(code);

@@ -5,9 +5,11 @@ import ru.terramain.microprocessor.plate.PlateState;
 
 public class MicroProcessorCore {
     public MicroProcessorWorker worker;
+    private boolean isScheduleRun;
 
     public MicroProcessorCore() {
-        worker = new MicroProcessorWorker();
+        this.worker = new MicroProcessorWorker();
+        this.isScheduleRun = false;
     }
 
     public void updateCode(String code) {
@@ -21,6 +23,12 @@ public class MicroProcessorCore {
     public void tick(MicroProcessorContext context) {
         worker.microProcessorContext = context;
 
+        if (this.isScheduleRun) {
+            if (!this.isRunning()) {
+                context.be.setRunning(true, true);
+            }
+            this.isScheduleRun = false;
+        }
 
         MicroProcessorWorker.LogMessage logMessage;
         while ((logMessage = worker.pollLog()) != null) {
@@ -61,5 +69,8 @@ public class MicroProcessorCore {
 
     public boolean isRunning() {
         return this.worker.isRunningStorage.isRunning;
+    }
+    public void scheduleRun() {
+        this.isScheduleRun = true;
     }
 }
