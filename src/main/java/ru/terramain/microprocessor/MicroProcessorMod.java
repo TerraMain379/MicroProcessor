@@ -38,6 +38,9 @@ import ru.terramain.microprocessor.block.MicroProcessorBlockEntity;
 import ru.terramain.microprocessor.block.MicroProcessorRenderer;
 import ru.terramain.microprocessor.deps.Integration;
 import ru.terramain.microprocessor.plate.plates.*;
+import ru.terramain.microprocessor.plate.plates.piston.MicroProcessorPistonHeadBlock;
+import ru.terramain.microprocessor.plate.plates.piston.PlatePiston;
+import ru.terramain.microprocessor.plate.plates.piston.PlateStickyPiston;
 
 @Mod(MicroProcessorMod.MODID)
 public class MicroProcessorMod {
@@ -54,7 +57,7 @@ public class MicroProcessorMod {
     public static final DeferredBlock<MicroProcessorBlock> MICRO_PROCESSOR_BLOCK = MicroProcessorBlock.instance();
     public static final DeferredItem<MicroProcessorItem> MICRO_PROCESSOR_ITEM = MicroProcessorItem.instance();
     public static final Supplier<BlockEntityType<MicroProcessorBlockEntity>> MICRO_PROCESSOR_BE = MicroProcessorBlockEntity.instance();
-
+    public static final DeferredBlock<MicroProcessorPistonHeadBlock> MICRO_PROCESSOR_PISTON_HEAD_BLOCK = MicroProcessorPistonHeadBlock.instance();
 
     public MicroProcessorMod(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::commonSetup);

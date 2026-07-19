@@ -39,7 +39,7 @@ public class MicroProcessorItem extends BlockItem {
     private static DeferredItem<MicroProcessorItem> inst = null;
     public static DeferredItem<MicroProcessorItem> instance() {
         if (inst == null) {
-            inst = MicroProcessorMod.ITEMS.register("micro_processor", () -> new MicroProcessorItem());
+            inst = MicroProcessorMod.ITEMS.register("microprocessor", () -> new MicroProcessorItem());
         }
         return inst;
     }

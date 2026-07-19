@@ -1,0 +1,6 @@
+{
+  "parent": "microprocessor:block/micro_processor_piston_head_short",
+  "textures": {
+    "head": "microprocessor:block/microprocessor_sticky_piston"
+  }
+}

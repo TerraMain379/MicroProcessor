@@ -1,27 +1,36 @@
-package ru.terramain.microprocessor.plate.plates;
+package ru.terramain.microprocessor.plate.plates.piston;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.Material;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.inventory.InventoryMenu;
+import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.registries.DeferredItem;
 import org.graalvm.polyglot.HostAccess;
 import ru.terramain.microprocessor.MicroProcessorMod;
 import ru.terramain.microprocessor.js.JsFuture;
 import ru.terramain.microprocessor.logic.MicroProcessorWorker;
+import ru.terramain.microprocessor.network.payload.MicroProcessorPistonActionPayload;
 import ru.terramain.microprocessor.plate.*;
 
-public class PlatePiston extends Plate<PlatePiston.Data> {
-    public static String TYPE = "piston";
+import java.util.function.Function;
+import java.util.function.Supplier;
 
-    protected PlatePiston() {
-        super(TYPE, DataCodec.INSTANCE, Item.instance, renderer, jsoGenerator);
+public class AbstractPlatePiston extends Plate<AbstractPlatePiston.Data> {
+    public boolean isSticky;
+    public Supplier<AbstractPlatePiston> getPlateMethod;
+
+    protected AbstractPlatePiston(String type, String texturePath, Supplier<AbstractPlatePiston> getPlateMethod, boolean isSticky) {
+        super(type, DataCodec.INSTANCE, Item.register(type, getPlateMethod), createRenderer(texturePath), createJsoGenerator(getPlateMethod));
+        this.isSticky = isSticky;
     }
 
     public static class Data implements PlateData {
@@ -65,38 +74,44 @@ public class PlatePiston extends Plate<PlatePiston.Data> {
             return STREAM_CODEC;
         }
     }
-    public static class Item extends AbstractPlateItem<Data, PlatePiston> {
-        public static final DeferredItem<AbstractPlateItem<Data, ?>> instance = MicroProcessorMod.ITEMS.register("plate_" + TYPE, () -> new Item());
+    public static class Item extends AbstractPlateItem<Data, AbstractPlatePiston> {
+        public static DeferredItem<AbstractPlateItem<Data, ?>> register(String type, Supplier<AbstractPlatePiston> getPlateMethod) {
+            return MicroProcessorMod.ITEMS.register("plate_" + type, () -> new Item(getPlateMethod));
+        }
+        public Supplier<AbstractPlatePiston> getPlateMethod;
 
         public Item(Properties properties) {
             super(properties);
         }
-        public Item() {
+        public Item(Supplier<AbstractPlatePiston> getPlateMethod) {
             this(new Properties());
+            this.getPlateMethod = getPlateMethod;
         }
 
         @Override
-        public PlatePiston getPlate() {
-            return PlatePiston.instance();
+        public AbstractPlatePiston getPlate() {
+            return getPlateMethod.get();
         }
     }
-    public static final PlateRenderer renderer = new TexturePlateRenderer() {
-        public static final ResourceLocation texture = ResourceLocation.fromNamespaceAndPath(MicroProcessorMod.MODID, "block/microprocessor_piston");
-        @Override
-        public TextureAtlasSprite sprite(PlateActionContext<?> context) {
-            return new Material(InventoryMenu.BLOCK_ATLAS, texture).sprite();
-        }
-    };
+    public static PlateRenderer createRenderer(String texturePath) {
+        return new TexturePlateRenderer() {
+            public final ResourceLocation texture = ResourceLocation.fromNamespaceAndPath(MicroProcessorMod.MODID, texturePath);
+            @Override
+            public TextureAtlasSprite sprite(PlateActionContext<?> context) {
+                return new Material(InventoryMenu.BLOCK_ATLAS, texture).sprite();
+            }
+        };
+    }
     public static class Jso extends AbstractJsoPlate {
         @HostAccess.Export public boolean isSpread;
         @HostAccess.Export public boolean inMove;
 
-        public Jso(MicroProcessorWorker worker, Direction direction, PlateState<?, ?> plateState) {
-            super(worker, PlatePiston.instance(), direction, plateState);
+        public Jso(MicroProcessorWorker worker, Direction direction, PlateState<?, ?> plateState, Supplier<AbstractPlatePiston> getPlateMethod) {
+            super(worker, getPlateMethod.get(), direction, plateState);
             this.update(plateState);
         }
         public void update(PlateState<?, ?> plateState1) {
-            PlateState<Data, PlatePiston> plateState = (PlateState<Data, PlatePiston>) plateState1;
+            PlateState<Data, AbstractPlatePiston> plateState = (PlateState<Data, AbstractPlatePiston>) plateState1;
             this.isSpread = plateState.data.isSpread;
             this.inMove = plateState.data.moveDelta != 0;
         }
@@ -119,8 +134,9 @@ public class PlatePiston extends Plate<PlatePiston.Data> {
             ));
         }
     }
-    public static final AbstractJsoPlateGenerator<Jso> jsoGenerator = Jso::new;
-
+    public static AbstractJsoPlateGenerator<Jso> createJsoGenerator(Supplier<AbstractPlatePiston> getPlateMethod) {
+        return (worker, direction, plateState) -> new Jso(worker, direction, plateState, getPlateMethod);
+    }
 
 
     public static class CheckForMoveRequestMessage extends MicroProcessorWorker.RequestPlateW2SMessage {
@@ -142,6 +158,21 @@ public class PlatePiston extends Plate<PlatePiston.Data> {
             return new MicroProcessorWorker.AnswerS2WMessage(request.id, false, true);
         }
         else if (request instanceof SetPoweredRequestMessage setSignalRequest) {
+            if (setSignalRequest.isPowered) {
+                BlockPos pos = context.context.be.getBlockPos();
+                MicroProcessorPistonActionPayload payload = new MicroProcessorPistonActionPayload(
+                        pos,
+                        context.direction,
+                        true
+                );
+                PacketDistributor.sendToPlayersNear(
+                        (ServerLevel) context.context.be.getLevel(),
+                        null,
+                        pos.getX(), pos.getY(), pos.getZ(), 50,
+                        payload
+                );
+                PlatePistonLogic.startSpread(context.context.be, context.direction);
+            }
             // TODO:
             Data data = (Data) context.plateState.data;
             data.isSpread = setSignalRequest.isPowered;
@@ -149,13 +180,5 @@ public class PlatePiston extends Plate<PlatePiston.Data> {
             return new MicroProcessorWorker.AnswerS2WMessage(request.id, false, setSignalRequest.isPowered);
         }
         return super.request(request, context);
-    }
-
-    private static PlatePiston inst = null;
-    public static PlatePiston instance() {
-        if (inst == null) {
-            inst = PlateRegister.register(new PlatePiston());
-        }
-        return inst;
     }
 }

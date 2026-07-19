@@ -123,7 +123,7 @@ public class MicroProcessorBlock extends BaseEntityBlock implements IRotate {
     private static DeferredBlock<MicroProcessorBlock> inst = null;
     public static DeferredBlock<MicroProcessorBlock> instance() {
         if (inst == null) {
-            inst = MicroProcessorMod.BLOCKS.register("micro_processor", () -> new MicroProcessorBlock());
+            inst = MicroProcessorMod.BLOCKS.register("microprocessor", () -> new MicroProcessorBlock());
         }
         return inst;
     }

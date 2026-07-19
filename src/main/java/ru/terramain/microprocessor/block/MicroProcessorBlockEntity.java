@@ -321,7 +321,7 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
     public static Supplier<BlockEntityType<MicroProcessorBlockEntity>> instance() {
         if (inst == null) {
             inst = MicroProcessorMod.BLOCK_ENTITIES.register(
-                "micro_processor_be",
+                "microprocessor_be",
                 () -> BlockEntityType.Builder.of(MicroProcessorBlockEntity::new, MicroProcessorMod.MICRO_PROCESSOR_BLOCK.get()).build(null)
             );
         }

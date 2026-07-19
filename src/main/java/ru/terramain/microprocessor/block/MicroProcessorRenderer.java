@@ -27,12 +27,6 @@ import ru.terramain.microprocessor.plate.plates.NullPlate;
  */
 public class MicroProcessorRenderer implements BlockEntityRenderer<MicroProcessorBlockEntity> {
 
-    // Базовый материал для граней без пластин
-    private static final Material BASE_MATERIAL = new Material(
-            InventoryMenu.BLOCK_ATLAS,
-            ResourceLocation.fromNamespaceAndPath(MicroProcessorMod.MODID, "block/micro_processor")
-    );
-
     public MicroProcessorRenderer(BlockEntityRendererProvider.Context context) { }
 
     /**
