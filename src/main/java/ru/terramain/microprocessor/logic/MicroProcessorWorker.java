@@ -297,6 +297,13 @@ public class MicroProcessorWorker {
             this.id = id;
         }
     }
+    public static class RequestWaitW2SMessage extends RequestW2SMessage {
+        public int tickTime;
+        public RequestWaitW2SMessage(long id, int tickTime) {
+            super(id);
+            this.tickTime = tickTime;
+        }
+    }
     public static abstract class RequestMicroProcessorW2SMessage extends RequestW2SMessage {
         public RequestMicroProcessorW2SMessage(long id) {
             super(id);

@@ -7,12 +7,14 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.piston.MovingPistonBlock;
-import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.PistonType;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.neoforged.neoforge.registries.DeferredBlock;
 import ru.terramain.microprocessor.block.MicroProcessorBlockEntity;
+import ru.terramain.microprocessor.block.MicroProcessorBlockEventsManager;
 import ru.terramain.microprocessor.plate.PlateState;
 
 import java.util.ArrayList;
@@ -21,38 +23,113 @@ import java.util.List;
 import java.util.Map;
 
 public class PlatePistonLogic {
-    public static boolean startSpread(MicroProcessorBlockEntity be, Direction direction) {
-//        PistonBaseBlock
+    public static final int DELTA_TIME = 3;
+    public static final DeferredBlock<?> HEAD_BLOCK = MicroProcessorPistonHeadBlock.instance();
+
+    public static void sendHandlingSignal(MicroProcessorBlockEntity be, Direction direction, boolean isPowered) {
+        MicroProcessorBlockEventsManager.<Direction>triggerBlockEvent(
+                isPowered ? AbstractPlatePiston.BLOCK_EVENT_POWER_ON : AbstractPlatePiston.BLOCK_EVENT_POWER_OFF,
+                be,
+                direction
+        );
+    }
+
+    // blocks moved - true
+    // no changes or internal plate changes - false
+    public static boolean handleSignal(MicroProcessorBlockEntity be, Direction direction, boolean isPowered) {
         Level level = be.getLevel();
+        BlockPos pos = be.getBlockPos();
+        if (level == null) return false;
+
         PlateState<?, ?> plateState = be.getPlateState(direction);
-        if (plateState.plate instanceof AbstractPlatePiston abstractPlatePiston) {
-            AbstractPlatePiston plate = (AbstractPlatePiston) plateState.plate;
-            AbstractPlatePiston.Data data = (AbstractPlatePiston.Data) plateState.data;
-            if (data.moveDelta > 0) return false;
-            if (data.isSpread) return false;
+        if (plateState == null || !(plateState.plate instanceof AbstractPlatePiston plate)) return false;
 
-            return moveBlocks(
-                    be.getLevel(),
-                    MicroProcessorPistonHeadBlock.instance().get(), // TODO: replace to custom head
-                    be.getBlockPos(),
-                    direction,
-                    true,
-                    false
-            );
+        AbstractPlatePiston.Data data = (AbstractPlatePiston.Data) plateState.data;
+        boolean isMoved;
+
+        if (!be.getLevel().isClientSide) isMoved = handleSignalServer(be, pos, direction, data, plate.isSticky, isPowered);
+        else isMoved = handleSignalClient(be, pos, direction, data, plate.isSticky, isPowered);
+
+        be.core.worker.dataPool.pushS2WMessage(new AbstractPlatePiston.SetPoweredResultEventMessage(direction, isMoved));
+        return isMoved;
+    }
+
+    public static boolean handleSignalServer(MicroProcessorBlockEntity be, BlockPos pos, Direction direction, AbstractPlatePiston.Data data, boolean isSticky, boolean isPowered) {
+        Level level = be.getLevel();
+
+        data.isPowered = isPowered;
+        be.setChanged();
+        if (data.isSpread == isPowered) {
+            return false;
         }
-        return false;
-    }
-    public static PistonStructureResolver resolver(MicroProcessorBlockEntity be, Direction direction, boolean extending) {
-        return new PistonStructureResolver(be.getLevel(), be.getBlockPos(), direction, extending);
+
+        if (data.moveDelta > 0) {
+            if (isPowered) return false;
+            else return finalSpread(be, pos, direction, data, isSticky);
+        }
+
+        boolean result = moveBlocks(level, pos, direction, isPowered, isSticky);
+        if (!isPowered || result) {
+            data.moveDelta = DELTA_TIME;
+            data.isSpread = isPowered;
+            be.setChanged();
+        }
+        return result;
     }
 
-    /**
-     * copy by {@link PistonBaseBlock#moveBlocks(Level, BlockPos, Direction, boolean)}.
-     */
-    public static boolean moveBlocks(Level level, Block headBlock, BlockPos pistonPos, Direction pistonFacing, boolean isExtending, boolean isSticky) {
+
+    public static boolean handleSignalClient(MicroProcessorBlockEntity be, BlockPos pos, Direction direction, AbstractPlatePiston.Data data, boolean isSticky, boolean isPowered) {
+        if (!isPowered) {
+            boolean wasInMove = finalSpread(be, pos, direction, data, isSticky);
+            if (wasInMove) return true;
+        }
+        return moveBlocks(be.getLevel(), pos, direction, isPowered, isSticky);
+    }
+
+    public static boolean finalSpread(MicroProcessorBlockEntity be, BlockPos pos, Direction direction, AbstractPlatePiston.Data data, boolean isSticky) {
+        // server-assert data.moveDelta > 0 && data.isSpread;
+        Level level = be.getLevel();
+        BlockPos headPos = pos.relative(direction);
+
+        boolean hasMovingHead;
+        {
+            BlockState blockState = level.getBlockState(headPos);
+            if (blockState.is(Blocks.MOVING_PISTON) && blockState.getValue(MovingPistonBlock.FACING) == direction) {
+                PistonMovingBlockEntity mbe = (PistonMovingBlockEntity) level.getBlockEntity(headPos);
+                if (mbe != null) {
+                    mbe.finalTick();
+                }
+                level.setBlock(headPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_MOVE_BY_PISTON | Block.UPDATE_CLIENTS);
+                hasMovingHead = true;
+            }
+            else hasMovingHead = false;
+        }
+
+        if (hasMovingHead) {
+            data.moveDelta = DELTA_TIME;
+            data.isSpread = false;
+            be.setChanged();
+        }
+        else return false;
+
+        {
+            BlockPos movingBlockPos = pos.relative(direction, 2);
+            BlockState blockState = level.getBlockState(movingBlockPos);
+            if (blockState.is(Blocks.MOVING_PISTON) && blockState.getValue(MovingPistonBlock.FACING) == direction) {
+                PistonMovingBlockEntity mbe = (PistonMovingBlockEntity) level.getBlockEntity(movingBlockPos);
+                mbe.finalTick();
+            }
+            else {
+                moveBlocks(level, pos, direction, false, isSticky);
+            }
+        }
+        return true;
+    }
+    public static boolean moveBlocks(Level level, BlockPos pistonPos, Direction pistonFacing, boolean isExtending, boolean isSticky) {
         BlockPos headPos = pistonPos.relative(pistonFacing);
-        if (!isExtending && level.getBlockState(headPos).is(headBlock)) {
-            level.setBlock(headPos, Blocks.AIR.defaultBlockState(), 20);
+        Direction moveDirection = isExtending ? pistonFacing : pistonFacing.getOpposite();
+        if (!isExtending && level.getBlockState(headPos).is(HEAD_BLOCK)) {
+            level.setBlock(headPos, Blocks.AIR.defaultBlockState(), Block.UPDATE_MOVE_BY_PISTON | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_INVISIBLE);
         }
 
         PistonStructureResolver structureResolver = new PistonStructureResolver(level, pistonPos, pistonFacing, isExtending);
@@ -60,54 +137,60 @@ public class PlatePistonLogic {
             return false;
         }
 
+        if (!isExtending && !isSticky) {
+            return true;
+        }
+
         Map<BlockPos, BlockState> blocksToClear = new HashMap<>();
         List<BlockPos> blocksToPush = structureResolver.getToPush();
+        List<BlockPos> blocksToDestroy = structureResolver.getToDestroy();
         List<BlockState> originalStates = new ArrayList<>();
+        BlockState[] statesForNeighborUpdates = new BlockState[blocksToPush.size() + blocksToDestroy.size()];
+        int neighborUpdateIndex = 0;
 
-        // Сохраняем исходные state всех блоков, которые будут двигаться
+        // Save original states all moving blocks
         for (BlockPos pushBlockPos : blocksToPush) {
             BlockState blockState = level.getBlockState(pushBlockPos);
             originalStates.add(blockState);
             blocksToClear.put(pushBlockPos, blockState);
         }
 
-        List<BlockPos> blocksToDestroy = structureResolver.getToDestroy();
-        BlockState[] statesForNeighborUpdates = new BlockState[blocksToPush.size() + blocksToDestroy.size()];
-        Direction moveDirection = isExtending ? pistonFacing : pistonFacing.getOpposite();
-        int neighborUpdateIndex = 0;
-
-        // Ломаем блоки с PushReaction.DESTROY (с конца списка)
+        // break blocks with PushReaction.DESTROY
         for (int destroyIndex = blocksToDestroy.size() - 1; destroyIndex >= 0; destroyIndex--) {
-            BlockPos destroyPos = blocksToDestroy.get(destroyIndex);
-            BlockState destroyState = level.getBlockState(destroyPos);
-            BlockEntity blockEntity = destroyState.hasBlockEntity() ? level.getBlockEntity(destroyPos) : null;
-            Block.dropResources(destroyState, level, destroyPos, blockEntity);
-            destroyState.onDestroyedByPushReaction(level, destroyPos, moveDirection, level.getFluidState(destroyPos));
-            if (!destroyState.is(BlockTags.FIRE)) {
-                level.addDestroyBlockEffect(destroyPos, destroyState);
+            BlockPos pos = blocksToDestroy.get(destroyIndex);
+            BlockState state = level.getBlockState(pos);
+            BlockEntity blockEntity = state.hasBlockEntity() ? level.getBlockEntity(pos) : null;
+
+            Block.dropResources(state, level, pos, blockEntity);
+            state.onDestroyedByPushReaction(level, pos, moveDirection, level.getFluidState(pos));
+
+            if (!state.is(BlockTags.FIRE)) {
+                level.addDestroyBlockEffect(pos, state);
             }
 
-            statesForNeighborUpdates[neighborUpdateIndex++] = destroyState;
+            statesForNeighborUpdates[neighborUpdateIndex++] = state;
         }
 
-        // Ставим moving_piston на новые позиции (с дальнего конца цепочки, чтобы не перезаписать блоки)
+        // placing MOVING_PISTON to new positions
         for (int pushIndex = blocksToPush.size() - 1; pushIndex >= 0; pushIndex--) {
             BlockPos movingPos = blocksToPush.get(pushIndex);
-            BlockState oldStateAtOrigin = level.getBlockState(movingPos);
+            BlockState stateAfterReaction = level.getBlockState(movingPos);
             BlockPos newPos = movingPos.relative(moveDirection);
             blocksToClear.remove(newPos);
+
             BlockState originBlockState = originalStates.get(pushIndex);
             BlockState movingPistonState = Blocks.MOVING_PISTON.defaultBlockState().setValue(MovingPistonBlock.FACING, pistonFacing);
-            level.setBlock(newPos, movingPistonState, 68);
+            level.setBlock(newPos, movingPistonState, Block.UPDATE_MOVE_BY_PISTON | Block.UPDATE_INVISIBLE);
             level.setBlockEntity(MovingPistonBlock.newMovingBlockEntity(
                     newPos, movingPistonState, originBlockState, pistonFacing, isExtending, false
             ));
-            statesForNeighborUpdates[neighborUpdateIndex++] = oldStateAtOrigin;
+            statesForNeighborUpdates[neighborUpdateIndex++] = stateAfterReaction;
         }
 
+        // placing MOVING_BLOCK by PISTON_HEAD
         if (isExtending) {
             PistonType pistonHeadType = isSticky ? PistonType.STICKY : PistonType.DEFAULT;
-            BlockState pistonHeadState = headBlock
+            BlockState pistonHeadState = HEAD_BLOCK.get()
                     .defaultBlockState()
                     .setValue(MicroProcessorPistonHeadBlock.FACING, pistonFacing)
                     .setValue(MicroProcessorPistonHeadBlock.TYPE, pistonHeadType);
@@ -116,7 +199,7 @@ public class PlatePistonLogic {
                     .setValue(MovingPistonBlock.FACING, pistonFacing)
                     .setValue(MovingPistonBlock.TYPE, isSticky ? PistonType.STICKY : PistonType.DEFAULT);
             blocksToClear.remove(headPos);
-            level.setBlock(headPos, headMovingPistonState, 68);
+            level.setBlock(headPos, headMovingPistonState, Block.UPDATE_MOVE_BY_PISTON | Block.UPDATE_CLIENTS);
             level.setBlockEntity(MovingPistonBlock.newMovingBlockEntity(
                     headPos, headMovingPistonState, pistonHeadState, pistonFacing, true, true
             ));
@@ -126,16 +209,16 @@ public class PlatePistonLogic {
 
         // Очищаем исходные клетки, откуда блоки уехали
         for (BlockPos clearPos : blocksToClear.keySet()) {
-            level.setBlock(clearPos, airState, 82);
+            level.setBlock(clearPos, airState, Block.UPDATE_MOVE_BY_PISTON | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_CLIENTS);
         }
 
         // Обновляем формы соседей после очистки
         for (Map.Entry<BlockPos, BlockState> clearedEntry : blocksToClear.entrySet()) {
             BlockPos clearedPos = clearedEntry.getKey();
             BlockState oldStateBeforeMove = clearedEntry.getValue();
-            oldStateBeforeMove.updateIndirectNeighbourShapes(level, clearedPos, 2);
-            airState.updateNeighbourShapes(level, clearedPos, 2);
-            airState.updateIndirectNeighbourShapes(level, clearedPos, 2);
+            oldStateBeforeMove.updateIndirectNeighbourShapes(level, clearedPos, Block.UPDATE_CLIENTS);
+            airState.updateNeighbourShapes(level, clearedPos, Block.UPDATE_CLIENTS);
+            airState.updateIndirectNeighbourShapes(level, clearedPos, Block.UPDATE_CLIENTS);
         }
 
         neighborUpdateIndex = 0;
@@ -144,7 +227,7 @@ public class PlatePistonLogic {
         for (int destroyedUpdateIndex = blocksToDestroy.size() - 1; destroyedUpdateIndex >= 0; destroyedUpdateIndex--) {
             BlockState destroyedState = statesForNeighborUpdates[neighborUpdateIndex++];
             BlockPos destroyedPos = blocksToDestroy.get(destroyedUpdateIndex);
-            destroyedState.updateIndirectNeighbourShapes(level, destroyedPos, 2);
+            destroyedState.updateIndirectNeighbourShapes(level, destroyedPos, Block.UPDATE_CLIENTS);
             level.updateNeighborsAt(destroyedPos, destroyedState.getBlock());
         }
 
@@ -154,9 +237,10 @@ public class PlatePistonLogic {
         }
 
         if (isExtending) {
-            level.updateNeighborsAt(headPos, headBlock);
+            level.updateNeighborsAt(headPos, HEAD_BLOCK.get());
         }
 
         return true;
     }
+
 }

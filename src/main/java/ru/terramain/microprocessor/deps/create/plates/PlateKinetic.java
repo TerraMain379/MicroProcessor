@@ -101,9 +101,6 @@ public class PlateKinetic extends Plate<PlateKinetic.Data> {
         public TextureAtlasSprite sprite(PlateActionContext<?> context) {
             return new Material(InventoryMenu.BLOCK_ATLAS, texture).sprite();
         }
-        public TextureAtlasSprite base() {
-            return new Material(InventoryMenu.BLOCK_ATLAS, PlateRenderer.BASE_TEXTURE).sprite();
-        }
 
         @Override
         public void renderPlate(PlateActionContext<?> plateContext, PlateRendererContext rendererContext) {

@@ -32,15 +32,13 @@ import java.util.function.Supplier;
 import org.slf4j.Logger;
 
 import ru.terramain.microprocessor.bcbui.EditorFonts;
-import ru.terramain.microprocessor.block.MicroProcessorBlock;
-import ru.terramain.microprocessor.block.MicroProcessorItem;
-import ru.terramain.microprocessor.block.MicroProcessorBlockEntity;
-import ru.terramain.microprocessor.block.MicroProcessorRenderer;
+import ru.terramain.microprocessor.block.*;
+import ru.terramain.microprocessor.plate.plates.piston.MicroProcessorPistonHeadRenderer;
 import ru.terramain.microprocessor.deps.Integration;
 import ru.terramain.microprocessor.plate.plates.*;
 import ru.terramain.microprocessor.plate.plates.piston.MicroProcessorPistonHeadBlock;
-import ru.terramain.microprocessor.plate.plates.piston.PlatePiston;
-import ru.terramain.microprocessor.plate.plates.piston.PlateStickyPiston;
+import ru.terramain.microprocessor.plate.plates.PlatePiston;
+import ru.terramain.microprocessor.plate.plates.PlateStickyPiston;
 
 @Mod(MicroProcessorMod.MODID)
 public class MicroProcessorMod {
@@ -53,11 +51,6 @@ public class MicroProcessorMod {
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(BuiltInRegistries.BLOCK_ENTITY_TYPE, MODID);
     public static final DeferredRegister<DataComponentType<?>> DATA_COMPONENT_TYPES = DeferredRegister.create(Registries.DATA_COMPONENT_TYPE, MicroProcessorMod.MODID);
 
-
-    public static final DeferredBlock<MicroProcessorBlock> MICRO_PROCESSOR_BLOCK = MicroProcessorBlock.instance();
-    public static final DeferredItem<MicroProcessorItem> MICRO_PROCESSOR_ITEM = MicroProcessorItem.instance();
-    public static final Supplier<BlockEntityType<MicroProcessorBlockEntity>> MICRO_PROCESSOR_BE = MicroProcessorBlockEntity.instance();
-    public static final DeferredBlock<MicroProcessorPistonHeadBlock> MICRO_PROCESSOR_PISTON_HEAD_BLOCK = MicroProcessorPistonHeadBlock.instance();
 
     public MicroProcessorMod(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::commonSetup);
@@ -72,6 +65,12 @@ public class MicroProcessorMod {
         BLOCK_ENTITIES.register(modEventBus);
         DATA_COMPONENT_TYPES.register(modEventBus);
         MicroProcessorDataComponents.register();
+        MicroProcessorBlockEventsManager.registerDefault();
+
+        MicroProcessorBlock.instance();
+        MicroProcessorBlockEntity.instance();
+        MicroProcessorItem.instance();
+        MicroProcessorPistonHeadBlock.instance();
 
         NullPlate.instance();
         PlateObserver.instance();
@@ -118,7 +117,8 @@ public class MicroProcessorMod {
 
         @SubscribeEvent
         public static void registerBER(EntityRenderersEvent.RegisterRenderers event) {
-            event.registerBlockEntityRenderer(MICRO_PROCESSOR_BE.get(), MicroProcessorRenderer::new);
+            event.registerBlockEntityRenderer(MicroProcessorBlockEntity.instance().get(), MicroProcessorRenderer::new);
+            event.registerBlockEntityRenderer(BlockEntityType.PISTON, MicroProcessorPistonHeadRenderer::new);
         }
     }
 }

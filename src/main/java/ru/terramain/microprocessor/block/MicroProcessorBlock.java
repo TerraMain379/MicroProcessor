@@ -18,6 +18,7 @@ import net.minecraft.world.level.block.entity.BlockEntityTicker;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import org.jetbrains.annotations.NotNull;
@@ -32,7 +33,7 @@ public class MicroProcessorBlock extends BaseEntityBlock implements IRotate {
     }
     public MicroProcessorBlock() {
         this(BlockBehaviour.Properties.of()
-            // .replaceable()
+            .pushReaction(PushReaction.NORMAL)
             .jumpFactor(3)
             .isRedstoneConductor((state, level, pos) -> false)
         );
@@ -113,11 +114,17 @@ public class MicroProcessorBlock extends BaseEntityBlock implements IRotate {
 
 
     @Override public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
-        return level.isClientSide() ? null : createTickerHelper(
-                type,
-                MicroProcessorBlockEntity.instance().get(),
-                (level1, blockPos, blockState, be) -> be.tick(level1, blockPos, blockState)
-        );
+        return level.isClientSide()
+                ? createTickerHelper(
+                    type,
+                    MicroProcessorBlockEntity.instance().get(),
+                    (level1, blockPos, blockState, be) -> be.clientTick(level1, blockPos, blockState)
+                )
+                : createTickerHelper(
+                    type,
+                    MicroProcessorBlockEntity.instance().get(),
+                    (level1, blockPos, blockState, be) -> be.tick(level1, blockPos, blockState)
+                );
     }
 
     private static DeferredBlock<MicroProcessorBlock> inst = null;

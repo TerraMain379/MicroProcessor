@@ -53,24 +53,15 @@ public abstract class Plate<D extends PlateData> {
         Direction direction = context.direction;
 
         Plate<?> plate = plateItem.getPlate();
-        PlateState<?, ?> newPlateState = PlateState.of(plate);
+        PlateState<?, ?> plateState = PlateState.of(plate);
 
-        onPlateRemoval(context, newPlateState, player);
-
-        PlateState<?, ?> oldPlateState = be.getPlateState(direction);
-        if (oldPlateState != null) {
-            AbstractPlateItem<?, ?> oldPlateItem = oldPlateState.plate.item.get();
-            ItemStack dropStack = oldPlateItem.fromPlateState(oldPlateState);
-            SimpleContainer container = new SimpleContainer(dropStack);
-            Containers.dropContents(level, pos.relative(direction), container);
-        }
-
-        be.setPlateState(direction, newPlateState);
-        afterPlateRemoval(context, newPlateState, player);
+        onPlateRemoval(context, plateState, player);
+        be.takeOutPlate(direction, plateState);
+        afterPlateRemoval(context, plateState, player);
 
         itemStack.setCount(itemStack.getCount()-1);
 
-        PlateActionContext<?> plateActionContext = new PlateActionContext<>(newPlateState, direction, context.context);
+        PlateActionContext<?> plateActionContext = new PlateActionContext<>(plateState, direction, context.context);
         plate.onPlatePlacement(plateActionContext, player);
         return ItemInteractionResult.SUCCESS;
     }
@@ -78,19 +69,10 @@ public abstract class Plate<D extends PlateData> {
         MicroProcessorBlockEntity be = context.context.be;
         Direction direction = context.direction;
 
-        PlateState<?, ?> oldPlateState = be.getPlateState(direction);
-        if (oldPlateState != null) {
-            onPlateRemoval(context, null, player);
-
-            AbstractPlateItem<?, ?> oldPlateItem = oldPlateState.plate.item.get();
-            ItemStack dropStack = oldPlateItem.fromPlateState(oldPlateState);
-            SimpleContainer container = new SimpleContainer(dropStack);
-            Containers.dropContents(level, pos.relative(direction), container);
-            be.setPlateState(direction, null);
-            afterPlateRemoval(context, null, player);
-            return ItemInteractionResult.SUCCESS;
-        }
-        return ItemInteractionResult.FAIL;
+        onPlateRemoval(context, null, player);
+        if (!be.takeOutPlate(direction, null)) return ItemInteractionResult.FAIL;
+        afterPlateRemoval(context, null, player);
+        return ItemInteractionResult.SUCCESS;
     }
     public ItemInteractionResult onClickOnMicroprocessorAny(PlateActionContext<?> context, ItemStack itemStack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
         if (!player.level().isClientSide) {

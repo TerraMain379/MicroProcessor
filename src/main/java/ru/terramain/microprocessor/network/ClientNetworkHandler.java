@@ -7,7 +7,6 @@ import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.DirectionalPayloadHandler;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 import ru.terramain.microprocessor.MicroProcessorMod;
-import ru.terramain.microprocessor.network.payload.MicroProcessorPistonActionPayload;
 import ru.terramain.microprocessor.network.payload.scriptscreen.CloseScriptScreenPayload;
 import ru.terramain.microprocessor.network.payload.scriptscreen.OpenScriptScreenPayload;
 import ru.terramain.microprocessor.network.payload.PlatesUpdatePayload;
@@ -47,11 +46,6 @@ public class ClientNetworkHandler {
                 PlatesUpdatePayload.TYPE,
                 PlatesUpdatePayload.STREAM_CODEC,
                 ClientPayloadHandlers::handlePlatesUpdate
-        );
-        registrar.playToClient(
-                MicroProcessorPistonActionPayload.TYPE,
-                MicroProcessorPistonActionPayload.STREAM_CODEC,
-                ClientPayloadHandlers::handleMicroProcessorPistonAction
         );
     }
 }

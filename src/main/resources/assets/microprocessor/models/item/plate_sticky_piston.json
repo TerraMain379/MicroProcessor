@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "microprocessor:item/piston_top_sticky"
+  }
+}

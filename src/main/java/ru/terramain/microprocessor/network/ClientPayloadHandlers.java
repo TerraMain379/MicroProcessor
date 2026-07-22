@@ -5,10 +5,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import ru.terramain.microprocessor.block.MicroProcessorBlockEntity;
-import ru.terramain.microprocessor.network.payload.MicroProcessorPistonActionPayload;
 import ru.terramain.microprocessor.network.payload.scriptscreen.CloseScriptScreenPayload;
-import ru.terramain.microprocessor.plate.PlateState;
-import ru.terramain.microprocessor.plate.plates.piston.PlatePistonLogic;
 import ru.terramain.microprocessor.scriptscreen.MicroProcessorScriptScreen;
 import ru.terramain.microprocessor.network.payload.scriptscreen.OpenScriptScreenPayload;
 import ru.terramain.microprocessor.network.payload.PlatesUpdatePayload;
@@ -45,18 +42,8 @@ public final class ClientPayloadHandlers {
         context.enqueueWork(() -> {
             BlockEntity blockEntity = context.player().level().getBlockEntity(payload.pos());
             if (blockEntity instanceof MicroProcessorBlockEntity be) {
-                be.plates = payload.plates().copy();
+                be.setCurrChanged(payload);
             }
-        });
-    }
-
-    public static void handleMicroProcessorPistonAction(MicroProcessorPistonActionPayload payload, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            BlockEntity blockEntity = context.player().level().getBlockEntity(payload.pos());
-            if (blockEntity instanceof MicroProcessorBlockEntity be) {
-                PlatePistonLogic.startSpread(be, payload.direction());
-            }
-            else new RuntimeException("handleMicroProcessorPistonAction: be != MicroProcessorBlockEntity").printStackTrace();
         });
     }
 }

@@ -17,12 +17,15 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.*;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.NotNull;
@@ -50,6 +53,9 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
     public String code;
     public List<String> logs;
 
+    protected boolean changed;
+    protected PlatesUpdatePayload currPlatesUpdatePayload;
+
     public MicroProcessorBlockEntity(BlockPos pos, BlockState state) {
         super(instance().get(), pos, state);
         this.plates = new Plates();
@@ -57,6 +63,8 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
         this.logs = new ArrayList<>();
         this.logs.add("[SYSTEM]: MicroProcessor created");
         this.core = new MicroProcessorCore();
+        this.changed = true;
+        this.currPlatesUpdatePayload = null;
     }
 
     ///////////////// serialize/deserialize
@@ -125,6 +133,10 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
 
     ///////////////// client sync
     @Override public void setChanged() {
+        super.setChanged();
+        this.changed = true;
+    }
+    public void sendChanged() { // server side
         if (!this.level.isClientSide) {
             ServerLevel serverLevel = (ServerLevel) level;
             PacketDistributor.sendToPlayersTrackingChunk(
@@ -136,7 +148,15 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
                     )
             );
         }
-        super.setChanged();
+    }
+    public void setCurrChanged(PlatesUpdatePayload payload) {
+        this.currPlatesUpdatePayload = payload;
+    }
+    public void handleChanged() {
+        if (this.currPlatesUpdatePayload != null) {
+            plates = this.currPlatesUpdatePayload.plates().copy();
+            this.currPlatesUpdatePayload = null;
+        }
     }
     public void setKineticChanged() {
         if (level == null || level.isClientSide) return;
@@ -276,6 +296,17 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
         allPlatesConsumer((plateState, context) -> {
             plateState.plate.onTick(context);
         });
+        if (this.changed) {
+            this.changed = false;
+            sendChanged();
+        }
+    }
+    public void clientTick(Level level, BlockPos pos, BlockState state) {
+        this.handleChanged();
+//        this.core.tick(new MicroProcessorContext(this));
+//        allPlatesConsumer((plateState, context) -> {
+//            plateState.plate.onTick(context);
+//        });
     }
 
     @Override public float getRotationSpeedModifier(Direction face) {
@@ -302,6 +333,9 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
     protected void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
         setKineticChanged();
     }
+    @Override public boolean triggerEvent(int id, int arg) {
+        return MicroProcessorBlockEventsManager.handleBlockEvent(id, this, arg);
+    }
     ///////////////// end actions
 
 
@@ -313,6 +347,20 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
         this.plates.plates[direction.ordinal()] = plateState;
         this.setChanged();
     }
+    public boolean takeOutPlate(Direction direction, PlateState<?, ?> newPlateState) {
+        PlateState<?, ?> plateState = getPlateState(direction);
+        if (plateState != null) {
+            AbstractPlateItem<?, ?> plateItem = plateState.plate.item.get();
+            ItemStack dropStack = plateItem.fromPlateState(plateState);
+            SimpleContainer container = new SimpleContainer(dropStack);
+            Containers.dropContents(this.getLevel(), getBlockPos().relative(direction), container);
+            setPlateState(direction, newPlateState);
+            setChanged();
+            return true;
+        }
+        setPlateState(direction, newPlateState);
+        return false;
+    }
     ///////////////// end getters/setters
 
 
@@ -322,7 +370,7 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
         if (inst == null) {
             inst = MicroProcessorMod.BLOCK_ENTITIES.register(
                 "microprocessor_be",
-                () -> BlockEntityType.Builder.of(MicroProcessorBlockEntity::new, MicroProcessorMod.MICRO_PROCESSOR_BLOCK.get()).build(null)
+                () -> BlockEntityType.Builder.of(MicroProcessorBlockEntity::new, MicroProcessorBlock.instance().get()).build(null)
             );
         }
         return inst;

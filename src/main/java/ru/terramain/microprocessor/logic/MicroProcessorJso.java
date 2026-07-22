@@ -3,6 +3,7 @@ package ru.terramain.microprocessor.logic;
 import net.minecraft.core.Direction;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Value;
+import ru.terramain.microprocessor.js.JsFuture;
 import ru.terramain.microprocessor.plate.AbstractJsoPlate;
 import ru.terramain.microprocessor.plate.PlateState;
 
@@ -67,6 +68,25 @@ public class MicroProcessorJso {
         }
         eventHandlers.computeIfAbsent(event, key -> new ArrayList<>());
         eventHandlers.get(event).add(handler);
+    }
+
+    @HostAccess.Export
+    public JsFuture<Integer> wait(Value tickTimeValue) {
+        if (tickTimeValue.isNumber()) {
+            double doubleTickTime = tickTimeValue.asDouble();
+            if (doubleTickTime % 1 == 0) {
+                int tickTime = (int) doubleTickTime;
+                if (tickTime > 20*60*60) {
+                    throw new MicroProcessorException("wait time > 20*60*60");
+                }
+                return this.worker.waitAnswerForW2SRequest(new MicroProcessorWorker.RequestWaitW2SMessage(
+                        this.worker.nextId.getAndIncrement(),
+                        tickTime
+                ));
+            }
+            throw new MicroProcessorException("wait time is not an integer");
+        }
+        throw new MicroProcessorException("wait time is not a number");
     }
 
     @HostAccess.Export

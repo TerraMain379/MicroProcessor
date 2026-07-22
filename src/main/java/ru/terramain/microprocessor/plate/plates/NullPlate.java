@@ -17,14 +17,14 @@ public class NullPlate extends Plate<NullPlate.Data> {
             return (D) new Data();
         }
     }
-    public static final PlateRenderer renderer = new TexturePlateRenderer() {
+    public static class Renderer implements TexturePlateRenderer {
         public static final ResourceLocation texture = ResourceLocation.fromNamespaceAndPath(MicroProcessorMod.MODID, "block/microprocessor_null");
 
-        @Override
-        public TextureAtlasSprite sprite(PlateActionContext<?> context) {
+        @Override public TextureAtlasSprite sprite(PlateActionContext<?> context) {
             return new Material(InventoryMenu.BLOCK_ATLAS, texture).sprite();
         }
     };
+    public static Renderer renderer = new Renderer();
 
     private static NullPlate inst = null;
     public static NullPlate instance() {

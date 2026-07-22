@@ -135,7 +135,7 @@ public class PlateDistributor extends Plate<PlateDistributor.Data> {
         }
 
         @HostAccess.Export
-        public JsFuture<Integer> readInput() {
+        public JsFuture readInput() {
             return this.worker.waitAnswerForW2SRequest(new GetInputRequestMessage(
                     this.worker.nextId.getAndIncrement(),
                     this.direction,
