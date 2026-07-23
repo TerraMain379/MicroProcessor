@@ -15,6 +15,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.neoforge.registries.DeferredItem;
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import ru.terramain.microprocessor.block.MicroProcessorBlockEntity;
 import ru.terramain.microprocessor.logic.MicroProcessorWorker;
 
@@ -91,4 +92,5 @@ public abstract class Plate<D extends PlateData> {
     public int calculateWeakSignal(PlateActionContext<?> context, Direction direction) { return 0; }
     public int calculateStrongSignal(PlateActionContext<?> context, Direction direction) { return 0; }
     public boolean hasShaft(PlateActionContext<?> context) { return false; }
+    public void checkMovable(PlateActionContext<?> context, MutableBoolean movable) { }
 }

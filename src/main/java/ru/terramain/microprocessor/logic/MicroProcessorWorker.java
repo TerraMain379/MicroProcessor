@@ -266,6 +266,10 @@ public class MicroProcessorWorker {
             this.key = key;
             this.args = args;
         }
+
+        public static EventS2WMessage create(String key, Object... args) {
+            return new EventS2WMessage(key, args);
+        }
     }
     public static class PlateEventS2WMessage extends S2WMessage {
         Direction direction;

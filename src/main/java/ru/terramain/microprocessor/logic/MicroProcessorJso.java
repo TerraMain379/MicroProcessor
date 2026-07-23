@@ -3,6 +3,7 @@ package ru.terramain.microprocessor.logic;
 import net.minecraft.core.Direction;
 import org.graalvm.polyglot.HostAccess;
 import org.graalvm.polyglot.Value;
+import org.graalvm.polyglot.proxy.ProxyArray;
 import ru.terramain.microprocessor.js.JsFuture;
 import ru.terramain.microprocessor.plate.AbstractJsoPlate;
 import ru.terramain.microprocessor.plate.PlateState;
@@ -89,21 +90,7 @@ public class MicroProcessorJso {
         throw new MicroProcessorException("wait time is not a number");
     }
 
-    @HostAccess.Export
-    public Object plate(String direction) {
-        Direction dir = switch (direction) {
-            case "UP", "up" -> Direction.UP;
-            case "DOWN", "down" -> Direction.DOWN;
-            case "NORTH", "north" -> Direction.NORTH;
-            case "SOUTH", "south" -> Direction.SOUTH;
-            case "WEST", "west" -> Direction.WEST;
-            case "EAST", "east" -> Direction.EAST;
-            default -> throw new IllegalArgumentException();
-        };
-        AbstractJsoPlate jso = this.jsoPlates[dir.ordinal()];
-        if (jso == null) return null;
-        return new JsoPlate(jso);
-    }
+
     public class JsoPlate {
         public AbstractJsoPlate jso;
         public JsoPlate(AbstractJsoPlate jso) {
@@ -129,6 +116,38 @@ public class MicroProcessorJso {
             return null;
         }
     }
+    @HostAccess.Export
+    public Object plate(String direction) {
+        Direction dir = switch (direction) {
+            case "UP", "up" -> Direction.UP;
+            case "DOWN", "down" -> Direction.DOWN;
+            case "NORTH", "north" -> Direction.NORTH;
+            case "SOUTH", "south" -> Direction.SOUTH;
+            case "WEST", "west" -> Direction.WEST;
+            case "EAST", "east" -> Direction.EAST;
+            default -> throw new IllegalArgumentException();
+        };
+        AbstractJsoPlate jso = this.jsoPlates[dir.ordinal()];
+        if (jso == null) return null;
+        return new JsoPlate(jso);
+    }
+    @HostAccess.Export
+    public ProxyArray searchPlates(String type) {
+        ArrayList<Object> searched = new ArrayList<>();
+        for (AbstractJsoPlate jsoPlate : jsoPlates) {
+            if (jsoPlate != null && jsoPlate.plate.type.equals(type)) {
+                searched.add(jsoPlate);
+            }
+        }
+        return ProxyArray.fromList(searched);
+    }
+    @HostAccess.Export
+    public Object searchPlate(String type) {
+        ProxyArray searched = searchPlates(type);
+        if (searched.getSize() > 0) return searched.get(0);
+        else return null;
+    }
+
 
     @HostAccess.Export
     public void log(Value value) {

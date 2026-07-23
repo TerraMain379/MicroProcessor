@@ -1,6 +1,6 @@
 package ru.terramain.microprocessor.block;
 
-import ru.terramain.microprocessor.plate.plates.piston.AbstractPlatePiston;
+import ru.terramain.microprocessor.plate.plates.AbstractPlatePiston;
 
 import java.util.ArrayList;
 import java.util.function.BiFunction;

@@ -19,11 +19,11 @@ public class MicroProcessorContext {
         this.be = be;
         this.externalLocked = externalLocked;
         if (Integration.IS_CREATE_LOADED) {
-            this.inContraption = Sable.HELPER.getContaining(be) != null;
+            this.inContraption = ru.terramain.microprocessor.deps.create.CreateIntegration.getContaining(be) != null;
         }
         else this.inContraption = false;
     }
     public MicroProcessorContext(MicroProcessorBlockEntity be) {
-        this(be, false);
+        this(be, be.inPistonMove);
     }
 }

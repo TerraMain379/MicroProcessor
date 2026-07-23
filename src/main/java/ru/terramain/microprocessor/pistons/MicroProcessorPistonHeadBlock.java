@@ -1,4 +1,4 @@
-package ru.terramain.microprocessor.plate.plates.piston;
+package ru.terramain.microprocessor.pistons;
 
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
@@ -29,6 +29,7 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.neoforge.registries.DeferredBlock;
 import ru.terramain.microprocessor.MicroProcessorMod;
+import ru.terramain.microprocessor.plate.plates.AbstractPlatePiston;
 
 public class MicroProcessorPistonHeadBlock extends DirectionalBlock {
     public static final MapCodec<MicroProcessorPistonHeadBlock> CODEC = simpleCodec(MicroProcessorPistonHeadBlock::new);

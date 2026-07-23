@@ -56,11 +56,13 @@ public class MicroProcessorBlock extends BaseEntityBlock implements IRotate {
     ///////////////// actions
     @Override protected @NotNull ItemInteractionResult useItemOn(ItemStack itemStack, BlockState state, Level level, BlockPos pos, Player player, InteractionHand hand, BlockHitResult hitResult) {
         MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) level.getBlockEntity(pos);
+        if (be == null) return ItemInteractionResult.FAIL;
         return be.onUseItem(itemStack, state, level, pos, player, hand, hitResult);
     }
     @Override protected void neighborChanged(BlockState blockState, Level level, BlockPos pos, Block block, BlockPos neighborPos, boolean movedByPiston) {
         super.neighborChanged(blockState, level, pos, block, neighborPos, movedByPiston);
         MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) level.getBlockEntity(pos);
+        if (be == null) return;
         be.onNeighborChanged(blockState, level, pos, block, neighborPos, movedByPiston);
     }
     @Override protected void onRemove(BlockState blockState, Level level, BlockPos pos, BlockState newBlockState, boolean isMoving) {
@@ -80,6 +82,7 @@ public class MicroProcessorBlock extends BaseEntityBlock implements IRotate {
     }
     @Override protected BlockState updateShape(BlockState state, Direction direction, BlockState neighborState, LevelAccessor level, BlockPos pos, BlockPos neighborPos) {
         MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) level.getBlockEntity(pos);
+        if (be == null) return state;
         be.neighborShapeChanged(state, direction, neighborState, level, pos, neighborPos);
         return state;
     }
@@ -91,10 +94,12 @@ public class MicroProcessorBlock extends BaseEntityBlock implements IRotate {
     }
     @Override protected int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
         MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) level.getBlockEntity(pos);
+        if (be == null) return 0;
         return be.onCheckWeakSignal(state, level, pos, direction.getOpposite());
     }
     @Override protected int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
         MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) level.getBlockEntity(pos);
+        if (be == null) return 0;
         return be.onCheckStrongSignal(state, level, pos, direction.getOpposite());
     }
     ///////////////// end static actions
@@ -102,6 +107,7 @@ public class MicroProcessorBlock extends BaseEntityBlock implements IRotate {
     ///////////////// create
     @Override public boolean hasShaftTowards(LevelReader levelReader, BlockPos blockPos, BlockState blockState, Direction direction) {
         MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) levelReader.getBlockEntity(blockPos);
+        if (be == null) return false;
         return be.hasShaftTowards(levelReader, blockPos, blockState, direction);
     }
     @Override public Direction.Axis getRotationAxis(BlockState blockState) {

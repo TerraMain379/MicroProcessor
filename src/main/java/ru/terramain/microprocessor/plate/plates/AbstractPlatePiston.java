@@ -1,4 +1,4 @@
-package ru.terramain.microprocessor.plate.plates.piston;
+package ru.terramain.microprocessor.plate.plates;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -16,6 +16,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.PistonType;
 import net.neoforged.neoforge.client.ClientHooks;
 import net.neoforged.neoforge.registries.DeferredItem;
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.graalvm.polyglot.HostAccess;
 import ru.terramain.microprocessor.MicroProcessorMod;
 import ru.terramain.microprocessor.block.MicroProcessorBlockEntity;
@@ -23,7 +24,8 @@ import ru.terramain.microprocessor.block.MicroProcessorBlockEventsManager;
 import ru.terramain.microprocessor.js.JsFuture;
 import ru.terramain.microprocessor.logic.MicroProcessorWorker;
 import ru.terramain.microprocessor.plate.*;
-import ru.terramain.microprocessor.plate.plates.NullPlate;
+import ru.terramain.microprocessor.pistons.MicroProcessorPistonHeadBlock;
+import ru.terramain.microprocessor.pistons.PlatePistonLogic;
 
 import java.util.function.Supplier;
 
@@ -251,14 +253,19 @@ public class AbstractPlatePiston extends Plate<AbstractPlatePiston.Data> {
         return super.request(request, context);
     }
 
-    @Override
-    public void onTick(PlateActionContext<?> context) {
+    @Override public void onTick(PlateActionContext<?> context) {
         super.onTick(context);
         Data data = (Data) context.plateState.data;
         if (data.moveDelta > 0) {
             data.moveDelta--;
             context.setChanged();
         }
+    }
+
+    @Override
+    public void checkMovable(PlateActionContext<?> context, MutableBoolean movable) {
+        Data data = (Data) context.plateState.data;
+        if (data.isSpread || data.moveDelta > 0) movable.setValue(false);
     }
 
     public void onDestroyHead(PlateActionContext<?> context) {

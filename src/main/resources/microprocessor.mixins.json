@@ -3,7 +3,10 @@
   "minVersion": "0.8",
   "package": "ru.terramain.microprocessor.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": [],
+  "mixins": [
+    "PistonBaseBlockMixin",
+    "PistonMovingBlockEntityMixin"
+  ],
   "client": [
     "EditBoxAccessor",
     "FontManagerAccessor",

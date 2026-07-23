@@ -1,7 +1,6 @@
 package ru.terramain.microprocessor.plate.plates;
 
 import ru.terramain.microprocessor.plate.PlateRegister;
-import ru.terramain.microprocessor.plate.plates.piston.AbstractPlatePiston;
 
 public class PlateStickyPiston extends AbstractPlatePiston {
     public static String TYPE = "sticky_piston";

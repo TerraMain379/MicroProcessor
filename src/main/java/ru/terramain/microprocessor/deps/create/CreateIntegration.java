@@ -1,8 +1,11 @@
 package ru.terramain.microprocessor.deps.create;
 
 import com.simibubi.create.api.behaviour.movement.MovementBehaviour;
+import dev.ryanhcode.sable.Sable;
+import dev.ryanhcode.sable.sublevel.SubLevel;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.bus.api.IEventBus;
-import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import org.jetbrains.annotations.Nullable;
 import ru.terramain.microprocessor.block.MicroProcessorBlock;
 import ru.terramain.microprocessor.deps.create.plates.PlateKinetic;
 
@@ -16,5 +19,10 @@ public class CreateIntegration {
                 MicroProcessorBlock.instance().get(),
                 new MicroProcessorMovementBehaviour()
         );
+    }
+
+
+    public static @Nullable SubLevel getContaining(BlockEntity blockEntity) {
+        return Sable.HELPER.getContaining(blockEntity);
     }
 }

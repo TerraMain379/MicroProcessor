@@ -1,11 +1,13 @@
-package ru.terramain.microprocessor.plate.plates.piston;
+package ru.terramain.microprocessor.pistons;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.piston.MovingPistonBlock;
 import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 import net.minecraft.world.level.block.piston.PistonStructureResolver;
@@ -13,9 +15,11 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.PistonType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.neoforged.neoforge.registries.DeferredBlock;
+import org.apache.logging.log4j.util.InternalException;
 import ru.terramain.microprocessor.block.MicroProcessorBlockEntity;
 import ru.terramain.microprocessor.block.MicroProcessorBlockEventsManager;
 import ru.terramain.microprocessor.plate.PlateState;
+import ru.terramain.microprocessor.plate.plates.AbstractPlatePiston;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -126,6 +130,9 @@ public class PlatePistonLogic {
         return true;
     }
     public static boolean moveBlocks(Level level, BlockPos pistonPos, Direction pistonFacing, boolean isExtending, boolean isSticky) {
+        // by piston modifiers manager
+        PistonMoveBlockMethodMixinLogic.moveBlocks_start(level);
+
         BlockPos headPos = pistonPos.relative(pistonFacing);
         Direction moveDirection = isExtending ? pistonFacing : pistonFacing.getOpposite();
         if (!isExtending && level.getBlockState(headPos).is(HEAD_BLOCK)) {
@@ -152,7 +159,9 @@ public class PlatePistonLogic {
         for (BlockPos pushBlockPos : blocksToPush) {
             BlockState blockState = level.getBlockState(pushBlockPos);
             originalStates.add(blockState);
-            blocksToClear.put(pushBlockPos, blockState);
+            // by piston modifiers manager
+            PistonMoveBlockMethodMixinLogic.moveBlocks_put(blocksToClear, pushBlockPos, blockState);
+            // blocksToClear.put(pushBlockPos, blockState);
         }
 
         // break blocks with PushReaction.DESTROY
@@ -181,9 +190,14 @@ public class PlatePistonLogic {
             BlockState originBlockState = originalStates.get(pushIndex);
             BlockState movingPistonState = Blocks.MOVING_PISTON.defaultBlockState().setValue(MovingPistonBlock.FACING, pistonFacing);
             level.setBlock(newPos, movingPistonState, Block.UPDATE_MOVE_BY_PISTON | Block.UPDATE_INVISIBLE);
-            level.setBlockEntity(MovingPistonBlock.newMovingBlockEntity(
+            // by piston modifiers manager
+            PistonMovingBlockEntity movingBlockEntity = (PistonMovingBlockEntity) PistonMoveBlockMethodMixinLogic.moveBlocks_newMovingBlockEntity(
                     newPos, movingPistonState, originBlockState, pistonFacing, isExtending, false
-            ));
+            );
+            // PistonMovingBlockEntity movingBlockEntity = (PistonMovingBlockEntity) MovingPistonBlock.newMovingBlockEntity(
+            //         newPos, movingPistonState, originBlockState, pistonFacing, isExtending, false
+            // );
+            level.setBlockEntity(movingBlockEntity);
             statesForNeighborUpdates[neighborUpdateIndex++] = stateAfterReaction;
         }
 
@@ -239,6 +253,9 @@ public class PlatePistonLogic {
         if (isExtending) {
             level.updateNeighborsAt(headPos, HEAD_BLOCK.get());
         }
+
+        // by piston modifiers manager
+        PistonMoveBlockMethodMixinLogic.moveBlocks_return();
 
         return true;
     }

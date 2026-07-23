@@ -23,20 +23,17 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
-import net.neoforged.neoforge.registries.DeferredBlock;
-import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
-
-import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 
 import ru.terramain.microprocessor.bcbui.EditorFonts;
 import ru.terramain.microprocessor.block.*;
-import ru.terramain.microprocessor.plate.plates.piston.MicroProcessorPistonHeadRenderer;
+import ru.terramain.microprocessor.pistons.CustomMovingBlockEntityRenderer;
+import ru.terramain.microprocessor.pistons.PistonModifiersManager;
 import ru.terramain.microprocessor.deps.Integration;
 import ru.terramain.microprocessor.plate.plates.*;
-import ru.terramain.microprocessor.plate.plates.piston.MicroProcessorPistonHeadBlock;
+import ru.terramain.microprocessor.pistons.MicroProcessorPistonHeadBlock;
 import ru.terramain.microprocessor.plate.plates.PlatePiston;
 import ru.terramain.microprocessor.plate.plates.PlateStickyPiston;
 
@@ -69,6 +66,7 @@ public class MicroProcessorMod {
 
         MicroProcessorBlock.instance();
         MicroProcessorBlockEntity.instance();
+        MicroProcessorBlockPistonBehaviour.register();
         MicroProcessorItem.instance();
         MicroProcessorPistonHeadBlock.instance();
 
@@ -83,6 +81,9 @@ public class MicroProcessorMod {
 
     private void commonSetup(final FMLCommonSetupEvent event) {
         Integration.setupEvent(event);
+        event.enqueueWork(() -> {
+            PistonModifiersManager.compile();
+        });
     }
 
     @SubscribeEvent
@@ -118,7 +119,7 @@ public class MicroProcessorMod {
         @SubscribeEvent
         public static void registerBER(EntityRenderersEvent.RegisterRenderers event) {
             event.registerBlockEntityRenderer(MicroProcessorBlockEntity.instance().get(), MicroProcessorRenderer::new);
-            event.registerBlockEntityRenderer(BlockEntityType.PISTON, MicroProcessorPistonHeadRenderer::new);
+            event.registerBlockEntityRenderer(BlockEntityType.PISTON, CustomMovingBlockEntityRenderer::new);
         }
     }
 }

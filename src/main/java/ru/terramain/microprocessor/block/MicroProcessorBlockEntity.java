@@ -25,9 +25,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.*;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.BlockHitResult;
 import net.neoforged.neoforge.network.PacketDistributor;
+import org.apache.commons.lang3.mutable.MutableBoolean;
 import org.jetbrains.annotations.NotNull;
 import ru.terramain.microprocessor.MicroProcessorMod;
 import ru.terramain.microprocessor.deps.create.plates.PlateKinetic;
@@ -39,6 +39,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import ru.terramain.microprocessor.MicroProcessorDataComponents;
+import ru.terramain.microprocessor.logic.MicroProcessorWorker;
+import ru.terramain.microprocessor.pistons.PistonMoveContext;
 import ru.terramain.microprocessor.scriptscreen.ScriptScreenSessions;
 import ru.terramain.microprocessor.network.payload.scriptscreen.OpenScriptScreenPayload;
 import ru.terramain.microprocessor.network.payload.PlatesUpdatePayload;
@@ -48,10 +50,13 @@ import ru.terramain.microprocessor.plate.plates.NullPlate;
 
 public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
     public MicroProcessorCore core;
+    public boolean saveForMove;
 
     public Plates plates;
     public String code;
     public List<String> logs;
+
+    public boolean inPistonMove;
 
     protected boolean changed;
     protected PlatesUpdatePayload currPlatesUpdatePayload;
@@ -63,6 +68,7 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
         this.logs = new ArrayList<>();
         this.logs.add("[SYSTEM]: MicroProcessor created");
         this.core = new MicroProcessorCore();
+        this.inPistonMove = false;
         this.changed = true;
         this.currPlatesUpdatePayload = null;
     }
@@ -80,6 +86,11 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
         ListTag listTag = new ListTag();
         this.logs.forEach(string -> listTag.add(net.minecraft.nbt.StringTag.valueOf(string)));
         tag.put("logs", listTag);
+        tag.putBoolean("in_piston_move", this.inPistonMove);
+        if (this.saveForMove) {
+            tag.putUUID("core_uuid", MicroProcessorCoresManager.moveCore(this.core));
+            this.saveForMove = false;
+        }
         tag.putBoolean("isRunning", this.core.isRunning());
     }
     @Override protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
@@ -101,6 +112,13 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
             }
         } else {
             this.logs = new ArrayList<>();
+        }
+
+
+        this.inPistonMove = tag.getBoolean("in_piston_move");
+        if (this.inPistonMove && tag.contains("core_uuid")) {
+            this.core = MicroProcessorCoresManager.stopMoveCore(tag.getUUID("core_uuid"));
+            if (this.core == null) this.core = new MicroProcessorCore();
         }
 
         if (tag.getBoolean("isRunning")) {
@@ -131,7 +149,7 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
     ///////////////// end serialize/deserialize
 
 
-    ///////////////// client sync
+    ///////////////// mark changes
     @Override public void setChanged() {
         super.setChanged();
         this.changed = true;
@@ -160,17 +178,21 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
     }
     public void setKineticChanged() {
         if (level == null || level.isClientSide) return;
-        // 1. Пока speed ещё может быть != 0 — починить downstream
-        RotationPropagator.handleRemoved(level, worldPosition, this);
-        // 2. Отцепить MP от старой сети
-        if (hasNetwork())
-            getOrCreateNetwork().remove(this);
-        removeSource();  // speed=0, source=null, network=null
-        // 3. Заново подключиться только через открытые порты
+        breakKinetics();
         attachKinetics();
         sendData();
     }
-    ///////////////// end client sync
+    public void breakKinetics() {
+        RotationPropagator.handleRemoved(level, worldPosition, this);
+        if (hasNetwork())
+            getOrCreateNetwork().remove(this);
+        removeSource();
+    }
+    public void markMovingSave() {
+        this.inPistonMove = true; // when zero-tick, the block doesn't have time to make a single tick in motion, causing tickInPistonMove to fail to mark inPistonMove
+        this.saveForMove = true;
+    }
+    ///////////////// end mark changes
 
 
     ///////////////// plates actions
@@ -235,6 +257,13 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
             return plateState.plate.calculateStrongSignal(context, direction);
         }, 0);
     }
+    public boolean movable() {
+        MutableBoolean movable = new MutableBoolean(true);
+        allPlatesConsumer((plateState, context) -> {
+            plateState.plate.checkMovable(context, movable);
+        });
+        return movable.booleanValue();
+    }
     ///////////////// end plates actions
 
 
@@ -292,6 +321,7 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
         ));
     }
     public void tick(Level level, BlockPos pos, BlockState state) {
+        this.inPistonMove = false;
         this.core.tick(new MicroProcessorContext(this));
         allPlatesConsumer((plateState, context) -> {
             plateState.plate.onTick(context);
@@ -307,6 +337,23 @@ public class MicroProcessorBlockEntity extends SplitShaftBlockEntity {
 //        allPlatesConsumer((plateState, context) -> {
 //            plateState.plate.onTick(context);
 //        });
+    }
+
+    public void onStartPistonMovePre() {
+        this.breakKinetics();
+        this.core.worker.dataPool.pushS2WMessage(MicroProcessorWorker.EventS2WMessage.create("start_piston_move"));
+    }
+    public void onEndPistonMovePost() {
+        this.setChanged();
+        this.setKineticChanged();
+        this.core.worker.dataPool.pushS2WMessage(MicroProcessorWorker.EventS2WMessage.create("end_piston_move"));
+    }
+    public void tickInPistonMove(PistonMoveContext moveContext) {
+        this.inPistonMove = true;
+        this.core.tick(new MicroProcessorContext(this));
+        allPlatesConsumer((plateState, context) -> {
+            plateState.plate.onTick(context);
+        });
     }
 
     @Override public float getRotationSpeedModifier(Direction face) {
