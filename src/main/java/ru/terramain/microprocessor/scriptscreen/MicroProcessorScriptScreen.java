@@ -72,7 +72,7 @@ public class MicroProcessorScriptScreen extends Screen {
     private void createCodeEditor() {
         this.codeEditor = new MultiLineTextFieldWidget(
                 layout.editorX, layout.editorY, layout.editorWidth, layout.editorHeight,
-                Component.empty(), this);
+                Component.empty());
         this.codeEditor.setMaxLength(20_000);
         this.codeEditor.setSyntaxHighlighter(JsSyntaxHighlighter.INSTANCE);
         this.codeEditor.setValue(this.code != null ? this.code : "");
@@ -83,7 +83,7 @@ public class MicroProcessorScriptScreen extends Screen {
     private void createLogsWidgets() {
         this.logsField = new MultiLineTextFieldWidget(
                 layout.logsX, layout.logsY, layout.logsWidth, layout.logsHeight,
-                Component.empty(), this);
+                Component.empty());
         this.logsField.setMaxLength(10_000);
         this.logsField.setSyntaxHighlighter(JsSyntaxHighlighter.INSTANCE);
         this.logsField.setLines(this.logs);

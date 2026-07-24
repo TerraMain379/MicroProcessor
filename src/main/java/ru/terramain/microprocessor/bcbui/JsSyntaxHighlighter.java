@@ -12,7 +12,7 @@ import java.util.Set;
 /**
  * Heuristic JavaScript syntax coloring (VS Code–style, no semantic analysis).
  */
-public final class JsSyntaxHighlighter {
+public final class JsSyntaxHighlighter implements SyntaxHighlighter {
     public static final JsSyntaxHighlighter INSTANCE = new JsSyntaxHighlighter();
 
     private static final Style DEFAULT = Style.EMPTY.withColor(ChatFormatting.GRAY);
@@ -56,7 +56,7 @@ public final class JsSyntaxHighlighter {
     private JsSyntaxHighlighter() {
     }
 
-    public List<Pair<Style, Integer>> getColorSpans(String text) {
+    @Override public List<Pair<Style, Integer>> getColorsPairs(String text) {
         List<Pair<Style, Integer>> spans = new ArrayList<>();
         pushSpan(spans, DEFAULT, 0);
 

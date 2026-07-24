@@ -11,7 +11,6 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.util.StringUtil;
 import net.minecraft.Util;
-import org.lwjgl.glfw.GLFW;
 import ru.terramain.microprocessor.mixin.EditBoxAccessor;
 
 import java.util.LinkedList;
@@ -19,32 +18,30 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class MultiLineTextFieldWidget extends EditBox {
-    private Screen owner;
     private ScrollbarWidget scrollX, scrollY;
-    private List<String> lines;
-    private List<Integer> textOffsets;
-    private List<Pair<Style, Integer>> textColors;
-    private int visibleLines = 11;
-    private int scrolledLines = 0;
-    private int horizontalOffset = 0;
-    private int maxLineWidth = 0;
+    private List<String> lines; // all lines
+    private List<Integer> linesStartsOffsets; // lines offsets in base 1d text
+    private List<Pair<Style, Integer>> colorsPairs; // swap color offsets
+    private int visibleLines = 11; // viewport vertical visible lines number
+    private int visibleFirstLineIndex = 0; // first line in viewport
+    private int horizontalCharOffset = 0; // horizontal viewport first char offset // TODO: migrate from char to pixels for no-monospace text
+    private int maxLineWidth = 0; // max line width in all text
     private Pair<Integer, Integer> cursorPosPreference;
     private boolean LShiftPressed, RShiftPressed = false;
     private boolean textModified = false;
-    private JsSyntaxHighlighter syntaxHighlighter;
+    private SyntaxHighlighter syntaxHighlighter;
     private EditBoxAccessor accessor = (EditBoxAccessor) this;
     private float timeSinceClick = 0.0f;
     private boolean readOnly = false;
 
-    public MultiLineTextFieldWidget(int x, int y, int width, int height, Component text, Screen owner) {
+    public MultiLineTextFieldWidget(int x, int y, int width, int height, Component text) {
         super(MultilineEditorSettings.getFont(), x, y, width, height, text);
         this.lines = new LinkedList<>();
-        this.textOffsets = new LinkedList<>();
+        this.linesStartsOffsets = new LinkedList<>();
         this.lines.add("");
-        this.textOffsets.add(0);
-        this.visibleLines = (height - 4) / metrics().lineStep();
-        this.scrolledLines = 0;
-        this.owner = owner;
+        this.linesStartsOffsets.add(0);
+        this.visibleLines = (height - 4) / lineStep();
+        this.visibleFirstLineIndex = 0;
         this.scrollX = new TextFieldScrollbarWidget(x, y + height + 1, width, 10, Component.literal(""), this, true);
         this.scrollY = new TextFieldScrollbarWidget(x + width + 1, y, 10, height, Component.literal(""), this, false);
         cursorPosPreference = Pair.of(0, 0);
@@ -110,9 +107,9 @@ public class MultiLineTextFieldWidget extends EditBox {
      * Call after changing width/height if setters were bypassed.
      */
     public void refreshScrollMetrics() {
-        this.visibleLines = Math.max((height - 4) / lineStep(), 1);
-        scrolledLines = clamp(scrolledLines, 0, Math.max(lines.size() - visibleLines, 0));
-        horizontalOffset = clamp(horizontalOffset, 0, maxHorizontalScrollOffset());
+        visibleLines = Math.max((height - 4) / lineStep(), 1);
+        visibleFirstLineIndex = clamp(visibleFirstLineIndex, 0, Math.max(lines.size() - visibleLines, 0));
+        horizontalCharOffset = clamp(horizontalCharOffset, 0, maxHorizontalScrollOffset());
 
         scrollY.refreshTrackMetrics();
         scrollX.refreshTrackMetrics();
@@ -123,16 +120,16 @@ public class MultiLineTextFieldWidget extends EditBox {
 
     private void syncScrollbarPositions() {
         int scrollableLines = scrollableLineCount();
-        scrollY.updatePos(scrollableLines > 0 ? (double) scrolledLines / scrollableLines : 0.0);
+        scrollY.updatePos((double) visibleFirstLineIndex / scrollableLines);
 
         int maxHScroll = maxHorizontalScrollOffset();
-        scrollX.updatePos(maxHScroll > 0 ? (double) horizontalOffset / maxHScroll : 0.0);
+        scrollX.updatePos((double) horizontalCharOffset / maxHScroll);
     }
 
     @Override
     public void renderWidget(GuiGraphics context, int mouseX, int mouseY, float delta){
         //TODO: render line at x of cursor if currently at parenthesis
-        timeSinceClick += delta/20.0f;
+        timeSinceClick += delta / 20.0f;
         int color;
         if (!this.isVisible()) {
             return;
@@ -147,12 +144,12 @@ public class MultiLineTextFieldWidget extends EditBox {
         EditorFontMetrics metrics = metrics();
 
         if (!lines.isEmpty()) {
-            for (int i = scrolledLines; i < scrolledLines + visibleLines && i < lines.size(); i++) {
+            for (int i = visibleFirstLineIndex; i < visibleFirstLineIndex + visibleLines && i < lines.size(); i++) {
                 String line = lines.get(i);
-                if (horizontalOffset < line.length()) {
-                    line = line.substring(horizontalOffset);
+                if (horizontalCharOffset < line.length()) {
+                    line = line.substring(horizontalCharOffset);
                     line = metrics.trimToPixelWidth(line, getInnerWidth());
-                    int y = this.getY() + lineStep() * (i - scrolledLines) + 5;
+                    int y = this.getY() + lineStep() * (i - visibleFirstLineIndex) + 5;
                     if (usesColoredText()) {
                         this.drawColoredLine(context, metrics, line, this.getX() + 5, y, i);
                     } else {
@@ -180,11 +177,11 @@ public class MultiLineTextFieldWidget extends EditBox {
         int lastSelectedLine = end.getFirst();
         int selectionEndOffset = end.getSecond();
 
-        selectionStartOffset -= horizontalOffset;
-        selectionEndOffset -= horizontalOffset;
+        selectionStartOffset -= horizontalCharOffset;
+        selectionEndOffset -= horizontalCharOffset;
 
-        selectionStartOffset = Math.max(selectionStartOffset,0);
-        selectionEndOffset = Math.max(selectionEndOffset,0);
+        selectionStartOffset = Math.max(selectionStartOffset, 0);
+        selectionEndOffset = Math.max(selectionEndOffset, 0);
 
         boolean renderVerticalCursor = !readOnly && selectionStart < accessor.getText().length();
         boolean verticalCursorVisible = !readOnly && this.isFocused() && (Util.getMillis() - accessor.getLastSwitchFocusTime()) / 300L % 2L == 0L;
@@ -192,14 +189,14 @@ public class MultiLineTextFieldWidget extends EditBox {
         context.pose().translate(0.0, 0.0, 0.1);
 
         for (int i = firstSelectedLine; i <= lastSelectedLine; i++) {
-            if (i < scrolledLines || i >= scrolledLines + visibleLines) {
+            if (i < visibleFirstLineIndex || i >= visibleFirstLineIndex + visibleLines) {
                 continue;
             }
             int x1 = this.getX() + 5;
             int x2 = x1;
-            int y = this.getY() + lineStep() * (i - scrolledLines) + 5;
+            int y = this.getY() + lineStep() * (i - visibleFirstLineIndex) + 5;
 
-            String visibleLine = lines.get(i).substring(Math.min(horizontalOffset, lines.get(i).length()));
+            String visibleLine = lines.get(i).substring(Math.min(horizontalCharOffset, lines.get(i).length()));
             if (i == firstSelectedLine) {
                 x1 += metrics.textWidth(visibleLine.substring(0, Math.min(selectionStartOffset, visibleLine.length())));
 
@@ -281,22 +278,22 @@ public class MultiLineTextFieldWidget extends EditBox {
 
     private void drawColoredLine(GuiGraphics context, EditorFontMetrics metrics, String content, int x, int y, int lineIndex) {
         int renderOffset = 0;
-        int startOffset = textOffsets.get(lineIndex);
+        int startOffset = linesStartsOffsets.get(lineIndex);
         int currentOffset = 0;
-        if (textColors.size() > 1) {
-            for (int i = 0; i < textColors.size(); i++) {
+        if (colorsPairs.size() > 1) {
+            for (int i = 0; i < colorsPairs.size(); i++) {
                 if (currentOffset >= content.length()) {
                     break;
                 }
-                int nextColorStart = (i + 1) < textColors.size() ? textColors.get(i + 1).getSecond() : (startOffset + content.length());
+                int nextColorStart = (i + 1) < colorsPairs.size() ? colorsPairs.get(i + 1).getSecond() : (startOffset + content.length());
                 nextColorStart -= startOffset;
-                nextColorStart -= horizontalOffset;
+                nextColorStart -= horizontalCharOffset;
                 if (nextColorStart > currentOffset) {
                     String substring = content.substring(currentOffset, clamp(nextColorStart, currentOffset, content.length()));
 
                     int color;
                     try {
-                        color = textColors.get(i).getFirst().getColor().getValue();
+                        color = colorsPairs.get(i).getFirst().getColor().getValue();
                     } catch (IndexOutOfBoundsException e) {
                         color = TextColor.fromLegacyFormat(ChatFormatting.GRAY).getValue();
                     }
@@ -312,7 +309,7 @@ public class MultiLineTextFieldWidget extends EditBox {
         } else {
             int color;
             try {
-                color = textColors.get(0).getFirst().getColor().getValue();
+                color = colorsPairs.get(0).getFirst().getColor().getValue();
             } catch (IndexOutOfBoundsException e) {
                 color = TextColor.fromLegacyFormat(ChatFormatting.GRAY).getValue();
             }
@@ -323,26 +320,26 @@ public class MultiLineTextFieldWidget extends EditBox {
     private int pointToIndex(double x, double y) {
         if (!lines.isEmpty()) {
             EditorFontMetrics metrics = metrics();
-            int lineIndex = (int) Math.floor((y - (this.getY() + 5)) / lineStep()) + scrolledLines;
+            int lineIndex = (int) Math.floor((y - (this.getY() + 5)) / lineStep()) + visibleFirstLineIndex;
             lineIndex = Math.max(Math.min(lineIndex, lines.size() - 1), 0);
             String line = lines.get(lineIndex);
             int offset = 0;
             if (!line.isEmpty()) {
-                String visibleLine = line.substring(Math.min(horizontalOffset, line.length()));
+                String visibleLine = line.substring(Math.min(horizontalCharOffset, line.length()));
                 int relX = (int) (x - (this.getX() + 5));
                 int chars = metrics.charIndexAtPixel(visibleLine, relX);
-                offset = Math.min(horizontalOffset + chars, line.length());
+                offset = Math.min(horizontalCharOffset + chars, line.length());
             }
 
-            return textOffsets.get(lineIndex) + Math.max(offset, 0);
+            return linesStartsOffsets.get(lineIndex) + Math.max(offset, 0);
         }
         return 0;
     }
 
     private Pair<Integer, Integer> indexToLineAndOffset(int index) {
         for (int i = 0; i < lines.size(); i++) {
-            if (textOffsets.get(i) + lines.get(i).length() + 1 > index) {
-                return Pair.of(i, index - textOffsets.get(i));
+            if (linesStartsOffsets.get(i) + lines.get(i).length() + 1 > index) {
+                return Pair.of(i, index - linesStartsOffsets.get(i));
             }
         }
         if (!lines.isEmpty()) {
@@ -370,17 +367,17 @@ public class MultiLineTextFieldWidget extends EditBox {
         int x, y;
         try {
             String line = lines.get(output.getFirst());
-            int from = Math.min(horizontalOffset, line.length());
+            int from = Math.min(horizontalCharOffset, line.length());
             int to = lineOffsetEnd(line, output.getSecond());
             x = this.getX() + 5 + metrics.textWidth(line, from, Math.max(from, to));
         } catch (Exception e) {
             x = this.getX() + 5;
         }
-        y = this.getY() + 5 + lineStep() * (output.getFirst() - scrolledLines);
+        y = this.getY() + 5 + lineStep() * (output.getFirst() - visibleFirstLineIndex);
         return Pair.of(x, y);
     }
 
-    public void setSyntaxHighlighter(JsSyntaxHighlighter highlighter) {
+    public void setSyntaxHighlighter(SyntaxHighlighter highlighter) {
         this.syntaxHighlighter = highlighter;
         this.onChanged(accessor.getText(), true);
     }
@@ -810,12 +807,12 @@ public class MultiLineTextFieldWidget extends EditBox {
     }
 
     public void scrollToEnd() {
-        scrolledLines = Math.max(0, lines.size() - visibleLines);
+        visibleFirstLineIndex = Math.max(0, lines.size() - visibleLines);
         syncScrollbarPositions();
     }
 
     public void scrollToTop() {
-        scrolledLines = 0;
+        visibleFirstLineIndex = 0;
         syncScrollbarPositions();
     }
 
@@ -844,29 +841,29 @@ public class MultiLineTextFieldWidget extends EditBox {
         }
         this.setUnformattedText(newText);
         if (syntaxHighlighter != null) {
-            textColors = new LinkedList<>(syntaxHighlighter.getColorSpans(newText));
+            colorsPairs = new LinkedList<>(syntaxHighlighter.getColorsPairs(newText));
         }
         refreshScrollMetrics();
     }
 
     private void setUnformattedText(String text) {
-        textColors = new LinkedList<>();
-        textColors.add(Pair.of(Style.EMPTY.withColor(ChatFormatting.GRAY), 0));
+        colorsPairs = new LinkedList<>();
+        colorsPairs.add(Pair.of(Style.EMPTY.withColor(ChatFormatting.GRAY), 0));
 
         lines = new LinkedList<>();
-        textOffsets = new LinkedList<>();
+        linesStartsOffsets = new LinkedList<>();
 
         int start = 0;
         for (int i = 0; i <= text.length(); i++) {
             if (i == text.length() || text.charAt(i) == '\n') {
                 lines.add(text.substring(start, i));
-                textOffsets.add(start);
+                linesStartsOffsets.add(start);
                 start = i + 1;
             }
         }
         if (lines.isEmpty()) {
             lines.add("");
-            textOffsets.add(0);
+            linesStartsOffsets.add(0);
         }
 
         maxLineWidth = 0;
@@ -915,10 +912,10 @@ public class MultiLineTextFieldWidget extends EditBox {
             return false;
         }
         if (LShiftPressed || RShiftPressed) {
-            horizontalOffset = clamp(horizontalOffset-(int)verticalAmount*MultilineEditorSettings.SCROLL_STEP_X, 0, maxHorizontalScrollOffset());
+            horizontalCharOffset = clamp(horizontalCharOffset -(int)verticalAmount*MultilineEditorSettings.SCROLL_STEP_X, 0, maxHorizontalScrollOffset());
             syncScrollbarPositions();
         } else {
-            scrolledLines = clamp(scrolledLines-(int)verticalAmount*MultilineEditorSettings.SCROLL_STEP_Y, 0, Math.max(lines.size()-visibleLines, 0));
+            visibleFirstLineIndex = clamp(visibleFirstLineIndex -(int)verticalAmount*MultilineEditorSettings.SCROLL_STEP_Y, 0, Math.max(lines.size()-visibleLines, 0));
             syncScrollbarPositions();
         }
         return true;
@@ -959,7 +956,7 @@ public class MultiLineTextFieldWidget extends EditBox {
 
     private void moveCursorVertical(int delta) {
         Pair<Integer, Integer> lineAndOffset = indexToLineAndOffset(accessor.invokeGetCursorPosWithOffset(0));
-        int yPreference = getY() + 5 + (lineAndOffset.getFirst() - scrolledLines) * lineStep();
+        int yPreference = getY() + 5 + (lineAndOffset.getFirst() - visibleFirstLineIndex) * lineStep();
         cursorPosPreference = Pair.of(cursorPosPreference.getFirst(), yPreference + delta * lineStep());
         int index = pointToIndex(cursorPosPreference.getFirst(), cursorPosPreference.getSecond());
         setCursor(index, Screen.hasShiftDown());
@@ -978,7 +975,7 @@ public class MultiLineTextFieldWidget extends EditBox {
         int lineIndex = Math.min(lineAndOffset.getFirst(), lines.size() - 1);
         String line = lines.get(lineIndex);
         int xPreference = this.getX() + 5 + metrics.textWidth(line.substring(0, lineOffsetEnd(line, lineAndOffset.getSecond())));
-        cursorPosPreference = Pair.of(xPreference, this.getY() + 5 + lineStep() * (lineIndex - scrolledLines));
+        cursorPosPreference = Pair.of(xPreference, this.getY() + 5 + lineStep() * (lineIndex - visibleFirstLineIndex));
         updateScrollPositions();
     }
 
@@ -991,8 +988,8 @@ public class MultiLineTextFieldWidget extends EditBox {
         EditorFontMetrics metrics = metrics();
         Pair<Integer, Integer> lineAndOffset = indexToLineAndOffset(accessor.invokeGetCursorPosWithOffset(0));
         if (lines.isEmpty()) {
-            horizontalOffset = 0;
-            scrolledLines = 0;
+            horizontalCharOffset = 0;
+            visibleFirstLineIndex = 0;
             syncScrollbarPositions();
             return;
         }
@@ -1000,34 +997,34 @@ public class MultiLineTextFieldWidget extends EditBox {
         int cursorOffset = lineOffsetEnd(line, lineAndOffset.getSecond());
         int visibleCols = visibleCharCount();
 
-        if (cursorOffset < horizontalOffset) {
-            horizontalOffset = cursorOffset;
-        } else if (cursorOffset - horizontalOffset >= visibleCols) {
-            horizontalOffset = cursorOffset - visibleCols + 1;
+        if (cursorOffset < horizontalCharOffset) {
+            horizontalCharOffset = cursorOffset;
+        } else if (cursorOffset - horizontalCharOffset >= visibleCols) {
+            horizontalCharOffset = cursorOffset - visibleCols + 1;
         }
 
         int maxHScroll = maxHorizontalScrollOffset();
-        horizontalOffset = clamp(horizontalOffset, 0, maxHScroll);
+        horizontalCharOffset = clamp(horizontalCharOffset, 0, maxHScroll);
         syncScrollbarPositions();
 
         int lineIndex = lineAndOffset.getFirst();
         int scrollableLines = scrollableLineCount();
-        if (lineIndex < scrolledLines) {
-            scrolledLines = clamp(scrolledLines - (scrolledLines - lineIndex), 0, Math.max(lines.size() - visibleLines, 0));
+        if (lineIndex < visibleFirstLineIndex) {
+            visibleFirstLineIndex = clamp(visibleFirstLineIndex - (visibleFirstLineIndex - lineIndex), 0, Math.max(lines.size() - visibleLines, 0));
             syncScrollbarPositions();
-        } else if (lineIndex >= scrolledLines + visibleLines) {
-            scrolledLines = clamp(scrolledLines + 1 + ((lineIndex - scrolledLines) - visibleLines), 0, Math.max(lines.size() - visibleLines, 0));
+        } else if (lineIndex >= visibleFirstLineIndex + visibleLines) {
+            visibleFirstLineIndex = clamp(visibleFirstLineIndex + 1 + ((lineIndex - visibleFirstLineIndex) - visibleLines), 0, Math.max(lines.size() - visibleLines, 0));
             syncScrollbarPositions();
         }
     }
 
     public void setScroll(double value) {
-        this.scrolledLines = (int) Math.max(Math.round((lines.size() - visibleLines) * value), 0);
+        this.visibleFirstLineIndex = (int) Math.max(Math.round((lines.size() - visibleLines) * value), 0);
     }
 
     public void setHorizontalOffset(double value) {
         int maxOffset = maxHorizontalScrollOffset();
-        this.horizontalOffset = (int) Math.floor(maxOffset * value);
+        this.horizontalCharOffset = (int) Math.floor(maxOffset * value);
     }
 
     @Override

@@ -32,9 +32,6 @@ public final class MultilineEditorSettings {
      */
     public static float MONO_CELL_SCALE = 1.0f;
 
-    private MultilineEditorSettings() {
-    }
-
     public static Font getFont() {
         return EditorFonts.getFont(FONT);
     }
