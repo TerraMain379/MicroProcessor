@@ -34,7 +34,6 @@ public class MicroProcessorBlock extends BaseEntityBlock implements IRotate {
     public MicroProcessorBlock() {
         this(BlockBehaviour.Properties.of()
             .pushReaction(PushReaction.NORMAL)
-            .jumpFactor(3)
             .isRedstoneConductor((state, level, pos) -> false)
         );
     }
