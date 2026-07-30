@@ -1,14 +1,11 @@
 package ru.terramain.microprocessor.mixin;
 
-import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.piston.MovingPistonBlock;
 import net.minecraft.world.level.block.piston.PistonMovingBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
@@ -34,14 +31,14 @@ public class PistonMovingBlockEntityMixin implements PistonMovingBlockEntityDuck
     }
 
 
-    @Inject(method = "saveAdditional", at = @At(value = "RETURN"))
+    @Inject(method = "saveAdditional", at = @At(value = "HEAD"))
     public void saveAdditional(CompoundTag tag, HolderLookup.Provider provider, CallbackInfo ci) {
         if (this.ghostMovingEntity != null) {
             PistonMovingBlockEntity $this = (PistonMovingBlockEntity) (Object) this;
             PistonBlockEntityBehaviour behaviour = PistonModifiersManager.getBehaviour(this.ghostMovingEntity);
             if (behaviour != null) {
                 PistonMoveContext context = new PistonMoveContext($this);
-                tag.put("microprocessor_block_entity", behaviour.saveInMove(this.ghostMovingEntity, context, true));
+                tag.put("microprocessor_block_entity", behaviour.saveInMove(this.ghostMovingEntity, provider, context, true));
             }
         }
     }
@@ -56,7 +53,7 @@ public class PistonMovingBlockEntityMixin implements PistonMovingBlockEntityDuck
                 PistonBlockEntityBehaviour behaviour = PistonModifiersManager.getBehaviour(entityBlock);
                 if (behaviour != null) {
                     PistonMoveContext context = new PistonMoveContext($this);
-                    behaviour.loadInMove(ghostMovingEntity, blockEntityTag, context, true);
+                    behaviour.loadInMove(ghostMovingEntity, blockEntityTag, provider, context, true);
                 }
             }
 
@@ -132,8 +129,8 @@ public class PistonMovingBlockEntityMixin implements PistonMovingBlockEntityDuck
     @Unique private static void restoreBlockEntity(BlockEntity ghostEntity, BlockEntity newBlockEntity, PistonBlockEntityBehaviour behaviour, PistonMovingBlockEntity movingEntity) {
         if (behaviour != null) {
             behaviour.onEndMoveIn(ghostEntity, new PistonMoveContext(movingEntity));
-            CompoundTag tag = behaviour.saveInMove(ghostEntity, new PistonMoveContext(movingEntity), false);
-            behaviour.loadInMove(newBlockEntity, tag, new PistonMoveContext(movingEntity), false);
+            CompoundTag tag = behaviour.saveInMove(ghostEntity, newBlockEntity.getLevel().registryAccess(), new PistonMoveContext(movingEntity), false);
+            behaviour.loadInMove(newBlockEntity, tag, newBlockEntity.getLevel().registryAccess(), new PistonMoveContext(movingEntity), false);
             newBlockEntity.clearRemoved();
             behaviour.onEndMovePost(newBlockEntity);
         }

@@ -1,5 +1,7 @@
 package ru.terramain.microprocessor.block;
 
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import ru.terramain.microprocessor.pistons.PistonBlockEntityBehaviour;
@@ -18,10 +20,18 @@ public class MicroProcessorBlockPistonBehaviour implements PistonBlockEntityBeha
         be.onStartPistonMovePre();
     }
 
-    @Override public CompoundTag saveInMove(BlockEntity ghostEntity, PistonMoveContext context, boolean isCloseGame) {
+    @Override
+    public CompoundTag saveInMove(BlockEntity ghostEntity, HolderLookup.Provider provider, PistonMoveContext context, boolean isCloseGame) {
         MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) ghostEntity;
         be.markMovingSave();
-        return PistonBlockEntityBehaviour.super.saveInMove(ghostEntity, context, isCloseGame);
+        return PistonBlockEntityBehaviour.super.saveInMove(ghostEntity, provider, context, isCloseGame);
+    }
+
+    @Override
+    public CompoundTag saveInMove(BlockEntity ghostEntity, RegistryAccess registryAccess, PistonMoveContext context, boolean isCloseGame) {
+        MicroProcessorBlockEntity be = (MicroProcessorBlockEntity) ghostEntity;
+        be.markMovingSave();
+        return PistonBlockEntityBehaviour.super.saveInMove(ghostEntity, registryAccess, context, isCloseGame);
     }
 
     @Override

@@ -1,5 +1,8 @@
 package ru.terramain.microprocessor.pistons;
 
+import net.minecraft.core.HolderLookup;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
@@ -14,10 +17,16 @@ public interface PistonBlockEntityBehaviour {
     default void onEndMovePost(BlockEntity blockEntity) { } // in world
     default void tick(BlockEntity ghostEntity, PistonMoveContext context) { } // in moving-entity
 
-    default CompoundTag saveInMove(BlockEntity ghostEntity, PistonMoveContext context, boolean isCloseGame) {
-        return ghostEntity.saveWithoutMetadata(ghostEntity.getLevel().registryAccess());
+    default CompoundTag saveInMove(BlockEntity ghostEntity, HolderLookup.Provider provider, PistonMoveContext context, boolean isCloseGame) {
+        return ghostEntity.saveWithoutMetadata(provider);
     }
-    default void loadInMove(BlockEntity ghostEntity, CompoundTag tag, PistonMoveContext context, boolean isCloseGame) {
-        ghostEntity.loadWithComponents(tag, ghostEntity.getLevel().registryAccess());
+    default CompoundTag saveInMove(BlockEntity ghostEntity, RegistryAccess registryAccess, PistonMoveContext context, boolean isCloseGame) {
+        return ghostEntity.saveWithoutMetadata(registryAccess);
+    }
+    default void loadInMove(BlockEntity ghostEntity, CompoundTag tag, HolderLookup.Provider provider, PistonMoveContext context, boolean isCloseGame) {
+        ghostEntity.loadWithComponents(tag, provider);
+    }
+    default void loadInMove(BlockEntity ghostEntity, CompoundTag tag, RegistryAccess registryAccess, PistonMoveContext context, boolean isCloseGame) {
+        ghostEntity.loadWithComponents(tag, registryAccess);
     }
 }
