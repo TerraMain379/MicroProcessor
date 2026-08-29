@@ -76,6 +76,8 @@ public class MicroProcessorMod {
         PlatePiston.instance();
         PlateStickyPiston.instance();
 
+        CreativeTab.register();
+
         Integration.registerEvent(modEventBus);
     }
 

@@ -80,10 +80,7 @@ public class MicroProcessorJso {
                 if (tickTime > 20*60*60) {
                     throw new MicroProcessorException("wait time > 20*60*60");
                 }
-                return this.worker.waitAnswerForW2SRequest(new MicroProcessorWorker.RequestWaitW2SMessage(
-                        this.worker.nextId.getAndIncrement(),
-                        tickTime
-                ));
+                return this.worker.waitTicks(tickTime);
             }
             throw new MicroProcessorException("wait time is not an integer");
         }

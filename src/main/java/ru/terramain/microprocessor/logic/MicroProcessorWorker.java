@@ -8,6 +8,7 @@ import org.graalvm.polyglot.PolyglotException;
 import org.graalvm.polyglot.SourceSection;
 import ru.terramain.microprocessor.plate.Plate;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -19,6 +20,7 @@ public class MicroProcessorWorker {
     public JsWorker jsWorker;
     public Thread workerThread;
     public AtomicLong nextId;
+    public ArrayList<WaitTask> waitTasks = new ArrayList<>();
 
     public MicroProcessorContext microProcessorContext;
     public MicroProcessorJso microProcessorJsObject;
@@ -89,6 +91,9 @@ public class MicroProcessorWorker {
             catch (InterruptedException e) { /* ok, its stop() method */ }
 
             if (message instanceof EventS2WMessage event) {
+                if (event.key.equals("tick")) {
+                    onTick();
+                }
                 this.microProcessorJsObject.runEvent(event.key, event.args);
             }
             if (message instanceof PlateEventS2WMessage event) {
@@ -114,6 +119,30 @@ public class MicroProcessorWorker {
         stop();
         this.logMessages.add(LogMessage.error(e, source));
     }
+
+
+    public void onTick() {
+        tickWaitTasks();
+    }
+
+    public JsFuture waitTicks(int ticks) {
+        CompletableFuture future = new CompletableFuture();
+        WaitTask waitTask = new WaitTask(future, ticks);
+        waitTasks.add(waitTask);
+        return new JsFuture<>(future);
+    }
+    public void tickWaitTasks() {
+        for (int i = 0; i < waitTasks.size()-1; i++) {
+            WaitTask waitTask = waitTasks.get(i);
+            waitTask.time--;
+            if (waitTask.time == 0) {
+                waitTask.future.complete(null);
+                waitTasks.remove(i);
+                i--;
+            }
+        }
+    }
+
 
 
     public static class LogMessage {
@@ -301,13 +330,6 @@ public class MicroProcessorWorker {
             this.id = id;
         }
     }
-    public static class RequestWaitW2SMessage extends RequestW2SMessage {
-        public int tickTime;
-        public RequestWaitW2SMessage(long id, int tickTime) {
-            super(id);
-            this.tickTime = tickTime;
-        }
-    }
     public static abstract class RequestMicroProcessorW2SMessage extends RequestW2SMessage {
         public RequestMicroProcessorW2SMessage(long id) {
             super(id);
@@ -320,6 +342,18 @@ public class MicroProcessorWorker {
             super(id);
             this.direction = direction;
             this.plate = plate;
+        }
+    }
+
+
+
+    public static class WaitTask {
+        public final CompletableFuture future;
+        public int time;
+
+        public WaitTask(CompletableFuture future, int time) {
+            this.future = future;
+            this.time = time;
         }
     }
 }

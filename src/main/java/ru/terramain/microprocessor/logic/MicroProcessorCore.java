@@ -7,12 +7,10 @@ import java.util.ArrayList;
 
 public class MicroProcessorCore {
     public MicroProcessorWorker worker;
-    public ArrayList<WaitTask> waitTasks;
     private boolean isScheduleRun;
 
     public MicroProcessorCore() {
         this.worker = new MicroProcessorWorker();
-        this.waitTasks = new ArrayList<>();
         this.isScheduleRun = false;
     }
 
@@ -36,7 +34,6 @@ public class MicroProcessorCore {
         if (!worker.isRunningStorage.isRunning || worker.dataPool == null || worker.microProcessorJsObject == null) return;
         worker.microProcessorJsObject.update(context);
         worker.dataPool.pushS2WMessage(new MicroProcessorWorker.EventS2WMessage("tick", new Object[]{}));
-        tickTimers(context);
         tickRequests(context);
     }
     protected void tickLogs(MicroProcessorContext context) {
@@ -47,19 +44,6 @@ public class MicroProcessorCore {
                 context.be.setRunningNotify(false);
             }
         }
-    }
-    protected void tickTimers(MicroProcessorContext context) {
-        for (WaitTask waitTask : waitTasks) {
-            waitTask.time--;
-            if (waitTask.time == 0) {
-                worker.dataPool.pushS2WMessage(new MicroProcessorWorker.AnswerS2WMessage(
-                        waitTask.id,
-                        false,
-                        null
-                ));
-            }
-        }
-        waitTasks.removeIf(waitTask -> waitTask.time == 0);
     }
     protected void tickRequests(MicroProcessorContext context) {
 
@@ -80,9 +64,6 @@ public class MicroProcessorCore {
                 }
                 worker.dataPool.pushS2WMessage(answer);
             }
-            else if (request instanceof MicroProcessorWorker.RequestWaitW2SMessage reqWait) {
-                waitTasks.add(new WaitTask(reqWait.id, reqWait.tickTime));
-            }
             else {
                 throw new RuntimeException("unknown RequestW2SMessage type: " + request.getClass().getSimpleName());
             }
@@ -94,16 +75,5 @@ public class MicroProcessorCore {
     }
     public void scheduleRun() {
         this.isScheduleRun = true;
-    }
-
-
-    public static class WaitTask {
-        public final long id;
-        public int time;
-
-        public WaitTask(long id, int time) {
-            this.id = id;
-            this.time = time;
-        }
     }
 }

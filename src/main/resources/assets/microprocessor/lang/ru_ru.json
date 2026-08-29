@@ -1,0 +1,9 @@
+{
+  "creativetab.microprocessor": "Микропроцессор",
+  "block.microprocessor.microprocessor": "Микропроцессор",
+  "item.microprocessor.plate_observer": "наблюдательная плита",
+  "item.microprocessor.plate_distributor": "плита передатчик",
+  "item.microprocessor.plate_piston": "поршневая плита",
+  "item.microprocessor.plate_sticky_piston": "липкая поршневая плита",
+  "item.microprocessor.plate_create_kinetic": "кинетическая плита"
+}
